@@ -16,11 +16,42 @@ Python C/C++ Interoperable Computer Vision Engine
 To build the standalone C/C++ code:
 
 ```sh
-g++ -Wall -Wformat -O0 -gdwarf-4 -g engine.cpp main.cpp  -o engine.bin -lX11
+g++ -DDEVBUILD=1 -Wall -Wformat -O0 -gdwarf-4 -g engine.cpp main.cpp  -o engine.bin -lX11
 ```
 
 And to build the interoperable library:
 
 ```sh
-g++ -fPIC -Wall -Wformat -O0 -gdwarf-4 -g -shared engine.cpp -o engine.so -lX11
+g++ -DDEVBUILD=1 -fPIC -Wall -Wformat -O0 -gdwarf-4 -g -shared engine.cpp -o engine.so -lX11
+```
+
+if you wish to compile the production code set `DEVBUILD` to zero or simply omit it from the command-line string.
+
+## Run
+
+To run from Python, copy the source code
+
+```py
+import ctypes
+
+engine = ctypes.cdll.LoadLibrary("./engine.so")
+
+# initializes engine
+engine.EngineInit.restype = ctypes.c_void_p
+base = engine.EngineInit()
+
+# engine-loop fixed framerate
+while True:
+    engine.EngineTime(ctypes.c_void_p(base))
+    engine.EngineDelay(ctypes.c_void_p(base))
+
+engine.EngineFree(ctypes.c_void_p(base))
+```
+
+and store it in the file `track-player.py`.
+
+To run the script:
+
+```sh
+python3 track-player.py
 ```
