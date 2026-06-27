@@ -50,6 +50,8 @@ engine.EngineFree(ctypes.c_void_p(base))
 
 and store it in the file `track-player.py`.
 
+Here you see my philosophy for writing interoperable code. If you own the library you are free to keep all the complexities in the library code and only use Python as the orchestrator. The advantage is that you don't need to change your script if you change the engine's implementation as long you return the base memory address to the script so that it can pass it to engine calls. When would you appreciate this architecture? If you have your django backend already and it's a big codebase (you are already invested) and you just want an endpoint to process data at speeds close to the bare metal.
+
 To run the script:
 
 ```sh
