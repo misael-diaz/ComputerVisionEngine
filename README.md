@@ -11,6 +11,10 @@ Python C/C++ Interoperable Computer Vision Engine
 
 [![QueryingWindowResourceID](https://img.youtube.com/vi/t6irqflaQ8s/hqdefault.jpg)](https://youtu.be/t6irqflaQ8s)
 
+**Heartbeat**: The python orchestrator now has a steady heartbeat running at 30 FPS by leveraging the time utilities that the C/C++ engine provides. The point here is to keep the Python code simple and unaffected by implementation changes of the core engine.
+
+[![SteadyHeartbeatPython](https://img.youtube.com/vi/42Rohg8A_lE/hqdefault.jpg)](https://youtu.be/42Rohg8A_lE)
+
 ## Build
 
 To build the standalone C/C++ code:
