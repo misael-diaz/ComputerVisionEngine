@@ -72,7 +72,7 @@ int main()
 	Window root_return = 0;
 	Window parent_return = 0;
 	Window *children_return = NULL;
-	XQueryTree(
+	rc = XQueryTree(
 		display,
 		subwindow,
 		&root_return,
@@ -80,6 +80,17 @@ int main()
 		&children_return,
 		&nchildren_return
 	);
+
+	if (!rc) {
+		fprintf(stderr, "%s\n", "error: failed to query tree");
+		XCloseDisplay(display);
+		_exit(1);
+	}
+	else if (!children_return) {
+		fprintf(stderr, "%s\n", "error: picked window with no children");
+		XCloseDisplay(display);
+		_exit(1);
+	}
 
 	Window GameWindow = 0;
 	if (1 == nchildren_return) {
