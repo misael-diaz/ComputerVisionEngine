@@ -19,6 +19,72 @@ See LICENSE file in the project root for the full license information.
 #include <sys/mman.h>
 #include "engine.hpp"
 
+#define persistent static
+#define ENGINE_FPS_TARGET 30.0f
+
+// defines the handmade-hero Assert() macro function for those that know Casey Muratori's legendary game engine development series
+#if DEVBUILD
+#define Assert(x)\
+	if (!(x)) {\
+		fprintf(stderr, "assertion failed %s:%d\n", __FILE__, __LINE__);\
+		*((volatile int*) 0) = 0;\
+	}
+#else
+#define Assert(x)
+#endif
+
+inline void LinuxSetTimeSpec(
+	struct timespec * const clock_time,
+	int64_t const nsec
+) {
+	clock_time->tv_sec  = (nsec / 1000000000);
+	clock_time->tv_nsec = (nsec % 1000000000);
+}
+
+inline void LinuxSetDelayTime(
+        struct timespec * const clock_target,
+        struct timespec const * const clock_start,
+        struct timespec const * const clock_delta
+) {
+	clock_target->tv_sec = (
+		(clock_start->tv_sec + clock_delta->tv_sec) +
+		((clock_start->tv_nsec + clock_delta->tv_nsec) / 1000000000)
+	);
+	clock_target->tv_nsec = (
+		((clock_start->tv_nsec + clock_delta->tv_nsec) % 1000000000)
+	);
+}
+
+inline void LinuxDiffTimeSpec(
+	struct timespec * const clock_delta,
+	struct timespec const * const clock_start,
+	struct timespec const * const clock_end
+) {
+	int64_t nsec_diff = 0;
+	int64_t const nsec_start = 1000000000 * clock_start->tv_sec + clock_start->tv_nsec;
+	int64_t const nsec_end   = 1000000000 *   clock_end->tv_sec +   clock_end->tv_nsec;
+	if (nsec_end > nsec_start) {
+		nsec_diff = (nsec_end - nsec_start);
+	} else {
+		nsec_diff = (nsec_start - nsec_end);
+	}
+	clock_delta->tv_sec  = (nsec_diff / 1000000000);
+	clock_delta->tv_nsec = (nsec_diff % 1000000000);
+}
+
+inline void LinuxDelay(
+        clockid_t clock_id,
+        struct timespec const * const clock_target
+) {
+        int rc = 0;
+        Assert(CLOCK_MONOTONIC == clock_id);
+        do {
+                rc = clock_nanosleep(clock_id, TIMER_ABSTIME, clock_target, NULL);
+                Assert(EFAULT != rc);
+                Assert(EINVAL != rc);
+        } while (EINTR == rc);
+}
+
 extern "C" void* EngineInit(void)
 {
 	errno = 0;
@@ -135,6 +201,10 @@ extern "C" void* EngineInit(void)
 	struct map *data = (typeof(data)) base;
 	data->display = display;
 	data->GameWindow = GameWindow;
+	float constexpr FPSFloat = ENGINE_FPS_TARGET;
+        float constexpr FPSInvFloat = 1.0e9f / FPSFloat;
+        int64_t constexpr FrameDurationTargetNanoSec = FPSInvFloat;
+	LinuxSetTimeSpec(&data->time_target, FrameDurationTargetNanoSec);
 	fprintf(stdout, "GameWindow: %ld\n", data->GameWindow);
 	return base;
 }
@@ -148,3 +218,42 @@ extern "C" void EngineFree(void* base)
 	struct map *data = (typeof(data)) base;
 	XCloseDisplay(data->display);
 }
+
+extern "C" void EngineTime(void *base)
+{
+	struct map *data = (typeof(data)) base;
+	clock_gettime(CLOCK_MONOTONIC, &data->time_start);
+}
+
+#if DEVBUILD
+extern "C" void EngineDelay(void *base)
+{
+	persistent int64_t frameno = 0;
+	struct map *data = (typeof(data)) base;
+	LinuxSetDelayTime(&data->time_iddle, &data->time_start, &data->time_target);
+	LinuxDelay(CLOCK_MONOTONIC, &data->time_iddle);
+	if (64 == frameno) {
+		frameno = 0;
+		struct timespec time_delta = {};
+		struct timespec time_end = {};
+		clock_gettime(CLOCK_MONOTONIC, &time_end);
+		LinuxDiffTimeSpec(&time_delta, &data->time_start, &time_end);
+		float const etime = (
+			1.0e+3 * time_delta.tv_sec +
+			1.0e-6 * time_delta.tv_nsec
+		);
+		float const FPS = 1.0e+3f / etime;
+		fprintf(stdout, "\nFPS: %.1f\netime (ms): %.1f\n", FPS, etime);
+	}
+	else {
+		++frameno;
+	}
+}
+#else
+extern "C" void EngineDelay(void *base)
+{
+	struct map *data = (typeof(data)) base;
+	LinuxSetDelayTime(&data->time_iddle, &data->time_start, &data->time_target);
+	LinuxDelay(CLOCK_MONOTONIC, &data->time_iddle);
+}
+#endif
