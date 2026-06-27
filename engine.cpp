@@ -135,6 +135,7 @@ extern "C" void* EngineInit(void)
 	struct map *data = (typeof(data)) base;
 	data->display = display;
 	data->GameWindow = GameWindow;
+	fprintf(stdout, "GameWindow: %ld\n", data->GameWindow);
 	return base;
 }
 
