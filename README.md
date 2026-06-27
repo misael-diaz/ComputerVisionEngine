@@ -7,6 +7,10 @@ Python C/C++ Interoperable Computer Vision Engine
 
 [![QueryingWindowResourceID](https://img.youtube.com/vi/oOI-gqFBDTg/hqdefault.jpg)](https://youtu.be/oOI-gqFBDTg)
 
+**Tracking-Player from Python**: from the onset I have verified that the engine can be called from Python with little ceremony.
+
+[![QueryingWindowResourceID](https://img.youtube.com/vi/t6irqflaQ8s/hqdefault.jpg)](https://youtu.be/t6irqflaQ8s)
+
 ## Build
 
 To build the standalone C/C++ code:
