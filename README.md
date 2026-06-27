@@ -9,6 +9,14 @@ Python C/C++ Interoperable Computer Vision Engine
 
 ## Build
 
+To build the standalone C/C++ code:
+
 ```sh
-g++ -Wall -Wformat -O0 -g main.cpp -o engine.bin -lX11
+g++ -Wall -Wformat -O0 -gdwarf-4 -g engine.cpp main.cpp  -o engine.bin -lX11
+```
+
+And to build the interoperable library:
+
+```sh
+g++ -fPIC -Wall -Wformat -O0 -gdwarf-4 -g -shared engine.cpp -o engine.so -lX11
 ```
