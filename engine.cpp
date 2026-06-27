@@ -17,7 +17,7 @@ See LICENSE file in the project root for the full license information.
 #include <unistd.h>
 #include <X11/cursorfont.h>
 #include <sys/mman.h>
-#include "engine.h"
+#include "engine.hpp"
 
 extern "C" void* EngineInit(void)
 {

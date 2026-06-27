@@ -11,7 +11,7 @@ See LICENSE file in the project root for the full license information.
 */
 
 #include <cstdio>
-#include "engine.h"
+#include "engine.hpp"
 
 int main()
 {
