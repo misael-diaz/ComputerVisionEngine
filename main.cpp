@@ -42,6 +42,7 @@ int main()
 
 	if (GrabSuccess != rc) {
 		fprintf(stderr, "%s\n", "error: failed to grab pointer");
+		XFreeCursor(display, cursor);
 		XCloseDisplay(display);
 		_exit(1);
 	}
@@ -83,11 +84,13 @@ int main()
 
 	if (!rc) {
 		fprintf(stderr, "%s\n", "error: failed to query tree");
+		XFreeCursor(display, cursor);
 		XCloseDisplay(display);
 		_exit(1);
 	}
 	else if (!children_return) {
 		fprintf(stderr, "%s\n", "error: picked window with no children");
+		XFreeCursor(display, cursor);
 		XCloseDisplay(display);
 		_exit(1);
 	}
@@ -100,6 +103,7 @@ int main()
 	if (!GameWindow) {
 		fprintf(stderr, "%s\n", "error: failed to get window");
 		XFree(children_return);
+		XFreeCursor(display, cursor);
 		XCloseDisplay(display);
 		_exit(1);
 	}
@@ -107,6 +111,7 @@ int main()
 	fprintf(stdout, "window: %ld\n", GameWindow);
 
 	XFree(children_return);
+	XFreeCursor(display, cursor);
 	XCloseDisplay(display);
 	return 0;
 }
