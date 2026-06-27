@@ -99,12 +99,14 @@ int main()
 
 	if (!GameWindow) {
 		fprintf(stderr, "%s\n", "error: failed to get window");
+		XFree(children_return);
 		XCloseDisplay(display);
 		_exit(1);
 	}
 
 	fprintf(stdout, "window: %ld\n", GameWindow);
 
+	XFree(children_return);
 	XCloseDisplay(display);
 	return 0;
 }
