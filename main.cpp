@@ -48,6 +48,7 @@ int main()
 
 	XEvent ev = {};
 	Window subwindow = 0;
+	// NOTE: the game is not played with a mouse so that we know that we don't need to worry about previous button events unlike `xwininfo` because of its general purpose
 	while (0 == subwindow) {
 		XAllowEvents(display, SyncPointer, CurrentTime);
 		while (XPending(display)) {
