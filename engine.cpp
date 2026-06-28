@@ -14,7 +14,11 @@ See LICENSE file in the project root for the full license information.
 #include <cstring>
 #include <cerrno>
 #include <unistd.h>
+#include <X11/Xutil.h>
+#include <X11/extensions/XShm.h>
 #include <X11/cursorfont.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include <sys/mman.h>
 #include "engine.hpp"
 
@@ -119,6 +123,7 @@ extern "C" void* EngineInit(void)
 	int64_t bytes_clusters = pixels_screen * sizeof(*clustep);
 	int64_t bytes_cluster_list = pixels_screen * sizeof(CID);
 	int64_t bytes_required = (
+		pagesz +
 		bytes_screen +
 		bytes_partition +
 		bytes_clusters +
@@ -221,14 +226,258 @@ extern "C" void* EngineInit(void)
 
 	XFree(children_return);
 	XFreeCursor(display, cursor);
+
+        XWindowAttributes attributes = {};
+        XGetWindowAttributes(display, GameWindow, &attributes);
+        int64_t const width = attributes.width;
+        int64_t const height = attributes.height;
+        int64_t const depth_window = attributes.depth;
+        Visual *visual = attributes.visual;
+
+	int32_t iters = 0;
+	int32_t red_shift = 0;
+	int32_t green_shift = 0;
+	int32_t blue_shift = 0;
+	int32_t const rgb_mask = 0xff;
+	int32_t const red_mask = visual->red_mask;
+	int32_t const green_mask = visual->green_mask;
+	int32_t const blue_mask = visual->blue_mask;
+	while ((rgb_mask << red_shift) != red_mask) {
+		red_shift += 8LU;
+		if (iters > 2) {
+			fprintf(stderr, "%s\n", "error: unexpected visual endianess");
+			XCloseDisplay(display);
+			_exit(1);
+		}
+		++iters;
+	}
+
+	iters = 0;
+	while ((rgb_mask << green_shift) != green_mask) {
+		green_shift += 8LU;
+		if (iters > 2) {
+			fprintf(stderr, "%s\n", "error: unexpected visual endianess");
+			XCloseDisplay(display);
+			_exit(1);
+		}
+		++iters;
+	}
+
+	iters = 0;
+	while ((rgb_mask << blue_shift) != blue_mask) {
+		blue_shift += 8LU;
+		if (iters > 2) {
+			fprintf(stderr, "%s\n", "error: unexpected visual endianess");
+			XCloseDisplay(display);
+			_exit(1);
+		}
+		++iters;
+	}
+
+        // TODO: disable fullscreen toggling because the client might support this but we are enforcing a fixed sized window
+        XSizeHints *SizeHintsGameWindow = XAllocSizeHints();
+	if (!SizeHintsGameWindow) {
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
+	// NOTES: fixes the game window dimensions so that we can do our work without defensive programming for handling dimension changes; in practice we don't want to change the game dimensions when we call this engine and so this guarantees that
+	SizeHintsGameWindow->flags = (PMinSize | PMaxSize);
+	SizeHintsGameWindow->min_width = width;
+	SizeHintsGameWindow->max_width = width;
+	SizeHintsGameWindow->min_height = height;
+	SizeHintsGameWindow->max_height = height;
+	XSetWMNormalHints(display, GameWindow, SizeHintsGameWindow);
+	XSync(display, False);
+
+	XShmSegmentInfo shminfo = {};
+	XImage *GameImage = XShmCreateImage(
+		display,
+		visual,
+		depth_pixel,
+		ZPixmap,
+		NULL,
+		&shminfo,
+		width,
+		height
+	);
+
+	if (!GameImage) {
+		XFree(SizeHintsGameWindow);
+		XCloseDisplay(display);
+		fprintf(stderr, "%s\n", "error: XShmCreateImage failed");
+		_exit(1);
+	}
+
+	int64_t const bytes_per_pixel = (depth_pixel >> 3);
+	int64_t const pitch = bytes_per_pixel * width;
+	int64_t const pixels = (width * height);
+	int64_t const bytes_framebuffer = (bytes_per_pixel * pixels);
+	if (GameImage->bytes_per_line != pitch) {
+		fprintf(stderr, "%s\n", "error: scanline length mismatch");
+		XFree(SizeHintsGameWindow);
+		XDestroyImage(GameImage);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+	else if ((GameImage->bytes_per_line * GameImage->height) != bytes_framebuffer) {
+		fprintf(stderr, "%s\n", "error: framebuffer size mismatch");
+		XFree(SizeHintsGameWindow);
+		XDestroyImage(GameImage);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
+	errno = 0;
+	rc = shmget(
+		IPC_PRIVATE,
+		bytes_framebuffer,
+		IPC_CREAT | 0777
+	);
+	if (-1 == rc) {
+		fprintf(stderr, "%s\n", "error: failed to get shared-memory identifier");
+		if (errno) {
+			fprintf(stderr, "%s\n", strerror(errno));
+		}
+		XFree(SizeHintsGameWindow);
+		XDestroyImage(GameImage);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
+	shminfo.shmid = rc;
+	bytes_partition = bytes_framebuffer;
+	bytes_clusters = pixels * sizeof(*clustep);
+	bytes_cluster_list = pixels * sizeof(CID);
+	// NOTE: the first page is reserved for the `struct map` after that we can do whatever we want but we opted to ensure 64-byte alignment of the clusters and cluster_list arrays
+	int64_t const offset_partition = pagesz;
+	int64_t const offset_clusters = (
+		(((offset_partition + bytes_partition) + 0x3fL) & (~0x3fL))
+	);
+	int64_t const offset_cluster_list = (
+		(((offset_clusters + bytes_clusters) + 0x3fL) & (~0x3fL))
+	);
+	// NOTE: `shmat` requires the framebuffer address to be paged aligned
+	int64_t const offset_framebuffer = (
+		(((offset_cluster_list + bytes_cluster_list) + mask_page) & (~mask_page))
+	);
+
+	void *framebuffer = ((char*) base) + offset_framebuffer;
+	if (((uintptr_t) framebuffer) & mask_page) {
+		fprintf(stderr, "%s\n", "error: framebuffer not paged aligned");
+		XFree(SizeHintsGameWindow);
+		XDestroyImage(GameImage);
+		XCloseDisplay(display);
+                _exit(1);
+	}
+
+	errno = 0;
+	shminfo.shmaddr = GameImage->data = ((char*) shmat(shminfo.shmid, framebuffer, SHM_REMAP));
+	if (shminfo.shmaddr != framebuffer) {
+		fprintf(stderr, "%s\n", "error: shmat changed the framebuffer address");
+		if (errno) {
+			fprintf(stderr, "%s\n", strerror(errno));
+		}
+		XFree(SizeHintsGameWindow);
+		XDestroyImage(GameImage);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
+	shminfo.readOnly = False;
+	if (!XShmAttach(display, &shminfo)) {
+		fprintf(stderr, "%s\n", "error: XShmAttach failed");
+		shmdt(shminfo.shmaddr);
+		shmctl(shminfo.shmid, IPC_RMID, 0);
+		// NOTE: framebuffer data is not heap allocated and so we must nullify it for XDestroyImage otherwise it will attempt to free a memory mapped region
+		GameImage->data = NULL;
+		XDestroyImage(GameImage);
+		XFree(SizeHintsGameWindow);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
+	errno = 0;
+	uint64_t const plane_mask = 0xffffff;
+	if (!XShmGetImage(display, GameWindow, GameImage, 0, 0, plane_mask)) {
+		fprintf(stderr, "%s\n", "error: XShmGetImage failed");
+		if (errno) {
+			fprintf(stderr, "%s\n", strerror(errno));
+		}
+		XShmDetach(display, &shminfo);
+		shmdt(shminfo.shmaddr);
+		shmctl(shminfo.shmid, IPC_RMID, 0);
+		GameImage->data = NULL;
+		XDestroyImage(GameImage);
+		XFree(SizeHintsGameWindow);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
+        XSetWindowAttributes OutputWindowAttributes = {};
+        OutputWindowAttributes.background_pixel = BlackPixelOfScreen(screen);
+        OutputWindowAttributes.event_mask = (
+                ExposureMask |
+                KeyPressMask |
+                0
+        );
+
+	Window OutputWindow = XCreateWindow(
+		display,
+		DefaultRootWindow(display),
+		0,
+		0,
+		width,
+		height,
+		0,
+		depth_window,
+		InputOutput,
+		visual,
+		CWBackPixel | CWEventMask,
+		&OutputWindowAttributes
+	);
+
+	// TODO: you may want to disable full screen toggling for the output window
+	XSizeHints *SizeHints = XAllocSizeHints();
+	if (!SizeHints) {
+		fprintf(stderr, "%s\n", "error; XSizeHints allocation failed");
+		XShmDetach(display, &shminfo);
+		shmdt(shminfo.shmaddr);
+		shmctl(shminfo.shmid, IPC_RMID, 0);
+		GameImage->data = NULL;
+		XDestroyImage(GameImage);
+		XFree(SizeHintsGameWindow);
+		XDestroyWindow(display, OutputWindow);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
+        SizeHints->flags = (PMinSize | PMaxSize);
+        SizeHints->min_width = width;
+        SizeHints->max_width = width;
+        SizeHints->min_height = height;
+        SizeHints->max_height = height;
+        XSetWMNormalHints(display, OutputWindow, SizeHints);
+        XStoreName(display, OutputWindow, "Handcrafted Blue Computer Vision Engine");
+
+	// TODO: map the engine window
+
 	struct map *data = (typeof(data)) base;
 	data->display = display;
 	data->GameWindow = GameWindow;
+	data->bytes_partition = bytes_partition;
+	data->bytes_clusters = bytes_clusters;
+	data->bytes_cluster_list = bytes_cluster_list;
+	data->bytes_framebuffer = bytes_framebuffer;
+	data->offset_partition = offset_partition;
+	data->offset_clusters = offset_clusters;
+	data->offset_cluster_list = offset_cluster_list;
+	data->offset_framebuffer = offset_framebuffer;
 	float constexpr FPSFloat = ENGINE_FPS_TARGET;
         float constexpr FPSInvFloat = 1.0e9f / FPSFloat;
         int64_t constexpr FrameDurationTargetNanoSec = FPSInvFloat;
 	LinuxSetTimeSpec(&data->time_target, FrameDurationTargetNanoSec);
-	fprintf(stdout, "GameWindow: %ld\n", data->GameWindow);
+	fprintf(stdout, "GameWindow: %d\n", data->GameWindow);
 	return base;
 }
 

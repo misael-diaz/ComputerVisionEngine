@@ -17,7 +17,7 @@ int main()
 {
 	void *base = EngineInit();
 	struct map *data = (typeof(data)) base;
-	fprintf(stdout, "GameWindow: %ld\n", data->GameWindow);
+	fprintf(stdout, "GameWindow: %d\n", data->GameWindow);
 	while (1) {
 		EngineTime(base);
 		EngineDelay(base);

@@ -28,13 +28,22 @@ extern "C" struct cluster {
 
 extern "C" struct map {
         Display *display;
-        int64_t GameWindow;
+        int32_t GameWindow;
+        int32_t OutputWindow;
         struct timespec time_start;
         struct timespec time_target;
         struct timespec time_iddle;
+	int64_t bytes_partition;
+	int64_t bytes_clusters;
+	int64_t bytes_cluster_list;
+	int64_t bytes_framebuffer;
+	int64_t offset_partition;
+	int64_t offset_clusters;
+	int64_t offset_cluster_list;
+	int64_t offset_framebuffer;
 };
 
-static_assert(64 == sizeof(struct map));
+static_assert(128 == sizeof(struct map));
 
 extern "C" void *EngineInit(void);
 extern "C" void EngineFree(void *base);
