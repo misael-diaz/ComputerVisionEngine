@@ -1,8 +1,30 @@
 #ifndef ENGINE_CVE_H
 #define ENGINE_CVE_H
 
+#include <cstdint>
 #include <X11/Xlib.h>
 #include <time.h>
+
+typedef int32_t CID;
+
+extern "C" struct cluster {
+	int32_t root;
+	int32_t node;
+	int32_t prev;
+	int32_t next;
+	int32_t size;
+	int32_t super;
+	int32_t total;
+	int32_t id;
+	int32_t mask;
+	int32_t x;
+	int32_t y;
+	int32_t x_min;
+	int32_t x_max;
+	int32_t y_min;
+	int32_t y_max;
+	int32_t __pad;
+};
 
 extern "C" struct map {
         Display *display;

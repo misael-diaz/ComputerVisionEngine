@@ -11,7 +11,6 @@ See LICENSE file in the project root for the full license information.
 */
 
 #include <cstdio>
-#include <cstdint>
 #include <cstring>
 #include <cerrno>
 #include <unistd.h>
@@ -97,7 +96,8 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
-	int64_t pagesz = rc;
+	int64_t const pagesz = rc;
+	int64_t const mask_page = (pagesz - 1);
 
 	Display *display = XOpenDisplay(NULL);
 	if (!display) {
@@ -105,8 +105,30 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
+	Screen *screen = DefaultScreenOfDisplay(display);
+	int32_t const width_screen = WidthOfScreen(screen);
+	int32_t const height_screen = HeightOfScreen(screen);
+	int64_t const pixels_screen = (width_screen * height_screen);
+	// NOTE: assuming 32-bit depth for a pixel, even if the visual depth is 24-bits the XImage data can still have a 32-bit depth and this is what we are counting on
+	int32_t const depth_pixel = 32;
+	// NOTE: assuming that the scanline bytes are exactly width_screen x depth_pixel, at least that has been my experience so far with XImages; if not the case, we can know that after getting the XImage data
+	int64_t const bytes_screen = depth_pixel * pixels_screen;
+	int64_t bytes_partition = bytes_screen;
+	struct cluster stud = {};
+	struct cluster *clustep = &stud;
+	int64_t bytes_clusters = pixels_screen * sizeof(*clustep);
+	int64_t bytes_cluster_list = pixels_screen * sizeof(CID);
+	int64_t bytes_required = (
+		bytes_screen +
+		bytes_partition +
+		bytes_clusters +
+		bytes_cluster_list +
+		0
+        );
+        int64_t bytes_aligned = ((bytes_required + mask_page) & (~mask_page));
+        int64_t bytes_mmap = (bytes_aligned << 1);
+
         errno = 0;
-	int64_t bytes_mmap = (pagesz << 1);
         void *base = mmap(NULL, bytes_mmap, PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 	if (MAP_FAILED == base) {
 		if (errno) {
