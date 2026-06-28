@@ -99,6 +99,12 @@ extern "C" void* EngineInit(void)
 
 	int64_t pagesz = rc;
 
+	Display *display = XOpenDisplay(NULL);
+	if (!display) {
+		fprintf(stderr, "%s\n", "error: failed to open display");
+		_exit(1);
+	}
+
         errno = 0;
 	int64_t bytes_mmap = (pagesz << 1);
         void *base = mmap(NULL, bytes_mmap, PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -106,12 +112,7 @@ extern "C" void* EngineInit(void)
 		if (errno) {
 			fprintf(stderr, "%s\n", strerror(errno));
 		}
-		_exit(1);
-	}
-
-	Display *display = XOpenDisplay(NULL);
-	if (!display) {
-		fprintf(stderr, "%s\n", "error: failed to open display");
+		XCloseDisplay(display);
 		_exit(1);
 	}
 
