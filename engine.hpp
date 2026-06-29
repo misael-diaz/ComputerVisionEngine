@@ -31,6 +31,8 @@ extern "C" struct map {
         Display *display;
         int32_t GameWindow;
         int32_t OutputWindow;
+        int32_t running;
+        int32_t frameno;
         struct timespec time_start;
         struct timespec time_target;
         struct timespec time_iddle;
@@ -44,13 +46,14 @@ extern "C" struct map {
 	int64_t offset_cluster_list;
 	int64_t offset_framebuffer;
 	int64_t offset_backbuffer;
-	int64_t _pad[14];
+	int64_t _pad[13];
 };
 
 static_assert(256 == sizeof(struct map));
 
 extern "C" void *EngineInit(void);
 extern "C" void EngineFree(void *base);
+extern "C" int EngineUpdateAndRender(void *base);
 extern "C" void EngineTime(void *base);
 extern "C" void EngineDelay(void *base);
 

@@ -24,6 +24,7 @@ See LICENSE file in the project root for the full license information.
 
 #define persistent static
 #define ENGINE_FPS_TARGET 30.0f
+#define KBD_ESC XKeysymToKeycode(display, XK_Escape)
 
 // defines the handmade-hero Assert() macro function for those that know Casey Muratori's legendary game engine development series
 #if DEVBUILD
@@ -539,10 +540,14 @@ extern "C" void* EngineInit(void)
 	// TODO: don't forget to store the shminfo struct also to detach and remove the system V shared-memory
 	// TODO: add the EngineUpdateAndRender() function
 
+	int32_t running = 1;
+	int32_t frameno = 0;
 	struct map *data = (typeof(data)) base;
 	data->display = display;
 	data->GameWindow = GameWindow;
 	data->OutputWindow = OutputWindow;
+	data->running = running;
+	data->frameno = frameno;
 	data->bytes_partition = bytes_partition;
 	data->bytes_clusters = bytes_clusters;
 	data->bytes_cluster_list = bytes_cluster_list;
@@ -572,6 +577,24 @@ extern "C" void EngineFree(void *base)
 	XCloseDisplay(data->display);
 }
 
+extern "C" int EngineUpdateAndRender(void *base)
+{
+	int rc = 1;
+	XEvent ev = {};
+	struct map *data = (typeof(data)) base;
+	Display *display = data->display;
+	Window OutputWindow = data->OutputWindow;
+	if (XCheckTypedWindowEvent(display, OutputWindow, KeyPress, &ev)) {
+		if ((KBD_ESC == ev.xkey.keycode)) {
+			rc = data->running = 0;
+			fprintf(stdout, "%s\n", "quitting upon user request");
+			return rc;
+		}
+	}
+
+	return rc;
+}
+
 extern "C" void EngineTime(void *base)
 {
 	struct map *data = (typeof(data)) base;
@@ -581,12 +604,11 @@ extern "C" void EngineTime(void *base)
 #if DEVBUILD
 extern "C" void EngineDelay(void *base)
 {
-	persistent int64_t frameno = 0;
 	struct map *data = (typeof(data)) base;
 	LinuxSetDelayTime(&data->time_iddle, &data->time_start, &data->time_target);
 	LinuxDelay(CLOCK_MONOTONIC, &data->time_iddle);
-	if (64 == frameno) {
-		frameno = 0;
+	if (64 == data->frameno) {
+		data->frameno = 0;
 		struct timespec time_delta = {};
 		struct timespec time_end = {};
 		clock_gettime(CLOCK_MONOTONIC, &time_end);
@@ -599,7 +621,7 @@ extern "C" void EngineDelay(void *base)
 		fprintf(stdout, "\nFPS: %.1f\netime (ms): %.1f\n", FPS, etime);
 	}
 	else {
-		++frameno;
+		data->frameno++;
 	}
 }
 #else

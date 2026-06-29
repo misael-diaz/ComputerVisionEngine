@@ -20,6 +20,9 @@ int main()
 	fprintf(stdout, "GameWindow: %d\n", data->GameWindow);
 	while (1) {
 		EngineTime(base);
+		if (!EngineUpdateAndRender(base)) {
+			break;
+		}
 		EngineDelay(base);
 	}
 	EngineFree(base);
