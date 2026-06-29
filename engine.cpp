@@ -468,6 +468,7 @@ extern "C" void* EngineInit(void)
 	struct map *data = (typeof(data)) base;
 	data->display = display;
 	data->GameWindow = GameWindow;
+	data->OutputWindow = OutputWindow;
 	data->bytes_partition = bytes_partition;
 	data->bytes_clusters = bytes_clusters;
 	data->bytes_cluster_list = bytes_cluster_list;
