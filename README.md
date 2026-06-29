@@ -15,6 +15,10 @@ Python C/C++ Interoperable Computer Vision Engine
 
 [![SteadyHeartbeatPython](https://img.youtube.com/vi/42Rohg8A_lE/hqdefault.jpg)](https://youtu.be/42Rohg8A_lE)
 
+**memory-leaks**: addresses memory leaks by storing the heap allocated data that Xlib requires in the engine memory map structure (commit hash: 72dc36461db1088b604d6476e32a51aa1e5a0b1d).
+
+[![NoMemoryLeaks](https://img.youtube.com/vi/CWouIx97tEo/hqdefault.jpg)](https://youtu.be/CWouIx97tEo)
+
 ## Build
 
 To build the standalone C/C++ code:
