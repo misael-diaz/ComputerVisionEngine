@@ -144,6 +144,16 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
+        errno = 0;
+	rc = madvise(base, bytes_mmap, MADV_WILLNEED);
+	if (-1 == rc) {
+		if (errno) {
+			fprintf(stderr, "%s\n", strerror(errno));
+		}
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
 	Window root = DefaultRootWindow(display);
 	Cursor cursor = XCreateFontCursor(display, XC_crosshair);
 	rc = XGrabPointer(
