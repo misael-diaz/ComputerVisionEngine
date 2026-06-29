@@ -47,6 +47,8 @@ base = engine.EngineInit()
 # engine-loop fixed framerate
 while True:
     engine.EngineTime(ctypes.c_void_p(base))
+    if engine.EngineUpdateAndRender(ctypes.c_void_p(base)) == 0:
+        break
     engine.EngineDelay(ctypes.c_void_p(base))
 
 engine.EngineFree(ctypes.c_void_p(base))
