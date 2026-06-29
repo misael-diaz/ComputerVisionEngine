@@ -14,7 +14,6 @@ See LICENSE file in the project root for the full license information.
 #include <cstring>
 #include <cerrno>
 #include <unistd.h>
-#include <X11/Xutil.h>
 #include <X11/cursorfont.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -544,6 +543,10 @@ extern "C" void* EngineInit(void)
 	data->display = display;
 	data->GameWindow = GameWindow;
 	data->OutputWindow = OutputWindow;
+	data->GameImage = GameImage;
+	data->OutputImage = OutputImage;
+	data->SizeHintsGameWindow = SizeHintsGameWindow;
+	data->SizeHints = SizeHints;
 	data->running = running;
 	data->frameno = frameno;
 	data->shminfo = shminfo;
@@ -576,6 +579,13 @@ extern "C" void EngineFree(void *base)
 	XShmDetach(data->display, &data->shminfo);
 	shmdt(data->shminfo.shmaddr);
 	shmctl(data->shminfo.shmid, IPC_RMID, 0);
+	data->GameImage->data = NULL;
+	XDestroyImage(data->GameImage);
+	data->OutputImage->data = NULL;
+	XDestroyImage(data->OutputImage);
+	XFree(data->SizeHintsGameWindow);
+	XFree(data->SizeHints);
+	XDestroyWindow(data->display, data->OutputWindow);
 	XCloseDisplay(data->display);
 }
 

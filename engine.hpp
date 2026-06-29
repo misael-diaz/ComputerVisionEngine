@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <X11/Xlib.h>
+#include <X11/Xutil.h>
 #include <X11/extensions/XShm.h>
 #include <time.h>
 
@@ -30,6 +31,10 @@ extern "C" struct cluster {
 /* TODO: add the frame counter `frameno` to struct map to remove local static variable from EngineDelay */
 extern "C" struct map {
         Display *display;
+        XImage *GameImage;
+        XImage *OutputImage;
+	XSizeHints *SizeHintsGameWindow;
+	XSizeHints *SizeHints;
         int32_t GameWindow;
         int32_t OutputWindow;
         int32_t running;
@@ -48,7 +53,7 @@ extern "C" struct map {
 	int64_t offset_cluster_list;
 	int64_t offset_framebuffer;
 	int64_t offset_backbuffer;
-	int64_t _pad[9];
+	int64_t _pad[5];
 };
 
 static_assert(256 == sizeof(struct map));
