@@ -461,6 +461,9 @@ extern "C" void* EngineInit(void)
 	XStoreName(display, OutputWindow, "Handcrafted Blue Computer Vision Engine");
 
 	// TODO: map the engine window
+	// TODO: store the pointers to the heap allocated resources that were obtained via Xlib calls so that you can free them later
+	// TODO: don't forget to store the shminfo struct also to detach and remove the system V shared-memory
+	// TODO: add the EngineUpdateAndRender() function
 
 	struct map *data = (typeof(data)) base;
 	data->display = display;
