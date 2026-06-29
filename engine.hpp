@@ -26,6 +26,7 @@ extern "C" struct cluster {
 	int32_t __pad;
 };
 
+/* TODO: add the frame counter `frameno` to struct map to remove local static variable from EngineDelay */
 extern "C" struct map {
         Display *display;
         int32_t GameWindow;
