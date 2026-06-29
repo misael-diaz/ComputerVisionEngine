@@ -485,7 +485,7 @@ extern "C" void* EngineInit(void)
 	return base;
 }
 
-extern "C" void EngineFree(void* base)
+extern "C" void EngineFree(void *base)
 {
 	if (!base) {
 		fprintf(stderr, "%s\n", "error: NULL pointer error");
