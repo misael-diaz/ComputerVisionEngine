@@ -477,6 +477,64 @@ extern "C" void* EngineInit(void)
 
 	XMapWindow(display, OutputWindow);
 	XWindowEvent(display, OutputWindow, ExposureMask, &ev);
+
+	char *backbuffer = (((char*) base) + offset_backbuffer);
+	XImage *OutputImage = XCreateImage(
+		display,
+		DefaultVisualOfScreen(DefaultScreenOfDisplay(display)),
+		depth_pixel,
+		ZPixmap,
+		0,
+		backbuffer,
+		width,
+		height,
+		depth_pixel,
+		0
+	);
+
+	if (!OutputImage) {
+		fprintf(stderr, "%s\n", "error: XCreateImage failed");
+		XShmDetach(display, &shminfo);
+		shmdt(shminfo.shmaddr);
+		shmctl(shminfo.shmid, IPC_RMID, 0);
+		GameImage->data = NULL;
+		XDestroyImage(GameImage);
+		XFree(SizeHintsGameWindow);
+		XFree(SizeHints);
+		XDestroyWindow(display, OutputWindow);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
+	if (
+		(GameImage->width != OutputImage->width) ||
+		(GameImage->height != OutputImage->height) ||
+		(GameImage->format != OutputImage->format) ||
+		(GameImage->depth != OutputImage->depth) ||
+		(GameImage->red_mask != OutputImage->red_mask) ||
+		(GameImage->green_mask != OutputImage->green_mask) ||
+		(GameImage->blue_mask != OutputImage->blue_mask) ||
+		(GameImage->bitmap_pad != OutputImage->bitmap_pad) ||
+		(GameImage->bitmap_bit_order != OutputImage->bitmap_bit_order) ||
+		(GameImage->bytes_per_line != OutputImage->bytes_per_line) ||
+		(GameImage->bits_per_pixel != OutputImage->bits_per_pixel) ||
+		0
+	   ) {
+		fprintf(stderr, "%s\n", "error: surprising XImage mistmatch");
+		XShmDetach(display, &shminfo);
+		shmdt(shminfo.shmaddr);
+		shmctl(shminfo.shmid, IPC_RMID, 0);
+		GameImage->data = NULL;
+		XDestroyImage(GameImage);
+		OutputImage->data = NULL;
+		XDestroyImage(OutputImage);
+		XFree(SizeHintsGameWindow);
+		XFree(SizeHints);
+		XDestroyWindow(display, OutputWindow);
+		XCloseDisplay(display);
+		_exit(1);
+	}
+
 	// TODO: store the pointers to the heap allocated resources that were obtained via Xlib calls so that you can free them later
 	// TODO: don't forget to store the shminfo struct also to detach and remove the system V shared-memory
 	// TODO: add the EngineUpdateAndRender() function
