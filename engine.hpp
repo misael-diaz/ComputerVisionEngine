@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <X11/Xlib.h>
+#include <X11/extensions/XShm.h>
 #include <time.h>
 
 typedef int32_t CID;
@@ -33,6 +34,7 @@ extern "C" struct map {
         int32_t OutputWindow;
         int32_t running;
         int32_t frameno;
+	XShmSegmentInfo shminfo;
         struct timespec time_start;
         struct timespec time_target;
         struct timespec time_iddle;
@@ -46,7 +48,7 @@ extern "C" struct map {
 	int64_t offset_cluster_list;
 	int64_t offset_framebuffer;
 	int64_t offset_backbuffer;
-	int64_t _pad[13];
+	int64_t _pad[9];
 };
 
 static_assert(256 == sizeof(struct map));

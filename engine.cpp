@@ -15,7 +15,6 @@ See LICENSE file in the project root for the full license information.
 #include <cerrno>
 #include <unistd.h>
 #include <X11/Xutil.h>
-#include <X11/extensions/XShm.h>
 #include <X11/cursorfont.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -537,7 +536,6 @@ extern "C" void* EngineInit(void)
 	}
 
 	// TODO: store the pointers to the heap allocated resources that were obtained via Xlib calls so that you can free them later
-	// TODO: don't forget to store the shminfo struct also to detach and remove the system V shared-memory
 	// TODO: add the EngineUpdateAndRender() function
 
 	int32_t running = 1;
@@ -548,6 +546,7 @@ extern "C" void* EngineInit(void)
 	data->OutputWindow = OutputWindow;
 	data->running = running;
 	data->frameno = frameno;
+	data->shminfo = shminfo;
 	data->bytes_partition = bytes_partition;
 	data->bytes_clusters = bytes_clusters;
 	data->bytes_cluster_list = bytes_cluster_list;
@@ -574,6 +573,9 @@ extern "C" void EngineFree(void *base)
 		_exit(1);
 	}	
 	struct map *data = (typeof(data)) base;
+	XShmDetach(data->display, &data->shminfo);
+	shmdt(data->shminfo.shmaddr);
+	shmctl(data->shminfo.shmid, IPC_RMID, 0);
 	XCloseDisplay(data->display);
 }
 
