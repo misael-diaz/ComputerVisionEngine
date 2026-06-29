@@ -125,6 +125,7 @@ extern "C" void* EngineInit(void)
 	int64_t bytes_required = (
 		pagesz +
 		bytes_screen +
+		bytes_screen +
 		bytes_partition +
 		bytes_clusters +
 		bytes_cluster_list +
@@ -312,6 +313,7 @@ extern "C" void* EngineInit(void)
 	int64_t const bytes_per_pixel = (depth_pixel >> 3);
 	int64_t const pitch = bytes_per_pixel * width;
 	int64_t const pixels = (width * height);
+	int64_t const bytes_backbuffer = (bytes_per_pixel * pixels);
 	int64_t const bytes_framebuffer = (bytes_per_pixel * pixels);
 	if (GameImage->bytes_per_line != pitch) {
 		fprintf(stderr, "%s\n", "error: scanline length mismatch");
@@ -357,9 +359,12 @@ extern "C" void* EngineInit(void)
 	int64_t const offset_cluster_list = (
 		(((offset_clusters + bytes_clusters) + 0x3fL) & (~0x3fL))
 	);
+	int64_t const offset_backbuffer = (
+		(((offset_cluster_list + bytes_cluster_list) + 0x3fL) & (~0x3fL))
+	);
 	// NOTE: `shmat` requires the framebuffer address to be paged aligned
 	int64_t const offset_framebuffer = (
-		(((offset_cluster_list + bytes_cluster_list) + mask_page) & (~mask_page))
+		(((offset_backbuffer + bytes_backbuffer) + mask_page) & (~mask_page))
 	);
 
 	void *framebuffer = ((char*) base) + offset_framebuffer;
@@ -472,10 +477,12 @@ extern "C" void* EngineInit(void)
 	data->bytes_partition = bytes_partition;
 	data->bytes_clusters = bytes_clusters;
 	data->bytes_cluster_list = bytes_cluster_list;
+	data->bytes_backbuffer = bytes_backbuffer;
 	data->bytes_framebuffer = bytes_framebuffer;
 	data->offset_partition = offset_partition;
 	data->offset_clusters = offset_clusters;
 	data->offset_cluster_list = offset_cluster_list;
+	data->offset_backbuffer = offset_backbuffer;
 	data->offset_framebuffer = offset_framebuffer;
 	float constexpr FPSFloat = ENGINE_FPS_TARGET;
 	float constexpr FPSInvFloat = 1.0e9f / FPSFloat;
