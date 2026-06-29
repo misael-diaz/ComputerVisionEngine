@@ -129,12 +129,12 @@ extern "C" void* EngineInit(void)
 		bytes_clusters +
 		bytes_cluster_list +
 		0
-        );
-        int64_t bytes_aligned = ((bytes_required + mask_page) & (~mask_page));
-        int64_t bytes_mmap = (bytes_aligned << 1);
+	);
+	int64_t bytes_aligned = ((bytes_required + mask_page) & (~mask_page));
+	int64_t bytes_mmap = (bytes_aligned << 1);
 
-        errno = 0;
-        void *base = mmap(NULL, bytes_mmap, PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+	errno = 0;
+	void *base = mmap(NULL, bytes_mmap, PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 	if (MAP_FAILED == base) {
 		if (errno) {
 			fprintf(stderr, "%s\n", strerror(errno));
@@ -146,15 +146,15 @@ extern "C" void* EngineInit(void)
 	Window root = DefaultRootWindow(display);
 	Cursor cursor = XCreateFontCursor(display, XC_crosshair);
 	rc = XGrabPointer(
-			display,
-			root,
-			False,
-			ButtonPressMask | ButtonReleaseMask,
-			GrabModeSync,
-			GrabModeAsync,
-			root,
-			cursor,
-			CurrentTime
+		display,
+		root,
+		False,
+		ButtonPressMask | ButtonReleaseMask,
+		GrabModeSync,
+		GrabModeAsync,
+		root,
+		cursor,
+		CurrentTime
 	);
 
 	if (GrabSuccess != rc) {
@@ -227,12 +227,12 @@ extern "C" void* EngineInit(void)
 	XFree(children_return);
 	XFreeCursor(display, cursor);
 
-        XWindowAttributes attributes = {};
-        XGetWindowAttributes(display, GameWindow, &attributes);
-        int64_t const width = attributes.width;
-        int64_t const height = attributes.height;
-        int64_t const depth_window = attributes.depth;
-        Visual *visual = attributes.visual;
+	XWindowAttributes attributes = {};
+	XGetWindowAttributes(display, GameWindow, &attributes);
+	int64_t const width = attributes.width;
+	int64_t const height = attributes.height;
+	int64_t const depth_window = attributes.depth;
+	Visual *visual = attributes.visual;
 
 	int32_t iters = 0;
 	int32_t red_shift = 0;
@@ -274,8 +274,8 @@ extern "C" void* EngineInit(void)
 		++iters;
 	}
 
-        // TODO: disable fullscreen toggling because the client might support this but we are enforcing a fixed sized window
-        XSizeHints *SizeHintsGameWindow = XAllocSizeHints();
+	// TODO: disable fullscreen toggling because the client might support this but we are enforcing a fixed sized window
+	XSizeHints *SizeHintsGameWindow = XAllocSizeHints();
 	if (!SizeHintsGameWindow) {
 		XCloseDisplay(display);
 		_exit(1);
@@ -368,7 +368,7 @@ extern "C" void* EngineInit(void)
 		XFree(SizeHintsGameWindow);
 		XDestroyImage(GameImage);
 		XCloseDisplay(display);
-                _exit(1);
+		_exit(1);
 	}
 
 	errno = 0;
@@ -414,13 +414,13 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
-        XSetWindowAttributes OutputWindowAttributes = {};
-        OutputWindowAttributes.background_pixel = BlackPixelOfScreen(screen);
-        OutputWindowAttributes.event_mask = (
-                ExposureMask |
-                KeyPressMask |
-                0
-        );
+	XSetWindowAttributes OutputWindowAttributes = {};
+	OutputWindowAttributes.background_pixel = BlackPixelOfScreen(screen);
+	OutputWindowAttributes.event_mask = (
+		ExposureMask |
+		KeyPressMask |
+		0
+	);
 
 	Window OutputWindow = XCreateWindow(
 		display,
@@ -452,13 +452,13 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
-        SizeHints->flags = (PMinSize | PMaxSize);
-        SizeHints->min_width = width;
-        SizeHints->max_width = width;
-        SizeHints->min_height = height;
-        SizeHints->max_height = height;
-        XSetWMNormalHints(display, OutputWindow, SizeHints);
-        XStoreName(display, OutputWindow, "Handcrafted Blue Computer Vision Engine");
+	SizeHints->flags = (PMinSize | PMaxSize);
+	SizeHints->min_width = width;
+	SizeHints->max_width = width;
+	SizeHints->min_height = height;
+	SizeHints->max_height = height;
+	XSetWMNormalHints(display, OutputWindow, SizeHints);
+	XStoreName(display, OutputWindow, "Handcrafted Blue Computer Vision Engine");
 
 	// TODO: map the engine window
 
@@ -474,8 +474,8 @@ extern "C" void* EngineInit(void)
 	data->offset_cluster_list = offset_cluster_list;
 	data->offset_framebuffer = offset_framebuffer;
 	float constexpr FPSFloat = ENGINE_FPS_TARGET;
-        float constexpr FPSInvFloat = 1.0e9f / FPSFloat;
-        int64_t constexpr FrameDurationTargetNanoSec = FPSInvFloat;
+	float constexpr FPSInvFloat = 1.0e9f / FPSFloat;
+	int64_t constexpr FrameDurationTargetNanoSec = FPSInvFloat;
 	LinuxSetTimeSpec(&data->time_target, FrameDurationTargetNanoSec);
 	fprintf(stdout, "GameWindow: %d\n", data->GameWindow);
 	return base;
