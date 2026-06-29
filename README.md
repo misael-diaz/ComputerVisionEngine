@@ -20,13 +20,13 @@ Python C/C++ Interoperable Computer Vision Engine
 To build the standalone C/C++ code:
 
 ```sh
-g++ -DDEVBUILD=1 -Wall -Wformat -O0 -gdwarf-4 -g engine.cpp main.cpp  -o engine.bin -lX11
+g++ -DDEVBUILD=1 -Wall -Wextra -Wformat -O0 -gdwarf-4 -g engine.cpp main.cpp -o engine.bin -lX11 -lXext
 ```
 
 And to build the interoperable library:
 
 ```sh
-g++ -DDEVBUILD=1 -fPIC -Wall -Wformat -O0 -gdwarf-4 -g -shared engine.cpp -o engine.so -lX11
+g++ -DDEVBUILD=1 -fPIC -Wall -Wextra -Wformat -O0 -gdwarf-4 -g -shared engine.cpp -o engine.so -lX11 -lXext
 ```
 
 if you wish to compile the production code set `DEVBUILD` to zero or simply omit it from the command-line string.
