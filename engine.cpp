@@ -432,7 +432,7 @@ extern "C" void* EngineInit(void)
 		0,
 		depth_window,
 		InputOutput,
-		visual,
+		DefaultVisualOfScreen(DefaultScreenOfDisplay(display)),
 		CWBackPixel | CWEventMask,
 		&OutputWindowAttributes
 	);
