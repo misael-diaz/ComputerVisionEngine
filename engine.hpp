@@ -30,19 +30,19 @@ extern "C" struct cluster {
 
 /* TODO: add the frame counter `frameno` to struct map to remove local static variable from EngineDelay */
 extern "C" struct map {
-        Display *display;
-        XImage *GameImage;
-        XImage *OutputImage;
+	Display *display;
+	XImage *GameImage;
+	XImage *OutputImage;
 	XSizeHints *SizeHintsGameWindow;
 	XSizeHints *SizeHints;
-        int32_t GameWindow;
-        int32_t OutputWindow;
-        int32_t running;
-        int32_t frameno;
+	int32_t GameWindow;
+	int32_t OutputWindow;
+	int32_t running;
+	int32_t frameno;
 	XShmSegmentInfo shminfo;
-        struct timespec time_start;
-        struct timespec time_target;
-        struct timespec time_iddle;
+	struct timespec time_start;
+	struct timespec time_target;
+	struct timespec time_iddle;
 	int64_t bytes_partition;
 	int64_t bytes_clusters;
 	int64_t bytes_cluster_list;
