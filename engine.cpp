@@ -563,6 +563,7 @@ extern "C" void* EngineInit(void)
 
 extern "C" void EngineFree(void *base)
 {
+	// TODO: don't forget to nullify the data member of XImages because it's not heap allocated
 	if (!base) {
 		fprintf(stderr, "%s\n", "error: NULL pointer error");
 		_exit(1);
