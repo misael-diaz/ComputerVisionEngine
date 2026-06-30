@@ -20,9 +20,11 @@ See LICENSE file in the project root for the full license information.
 #include <sys/mman.h>
 #include "engine.hpp"
 
+#define internal static
 #define persistent static
-#define ENGINE_FPS_TARGET 30.0f
 #define KBD_ESC XKeysymToKeycode(display, XK_Escape)
+#define BLUE_MASK_SONIC (1L << 0)
+#define Blue(r, g, b) ((((r) >= 0x30) && ((r) < 0x60)) && (((g) >= 0x30) && ((g) < 0x60)) && (((b) >= 0x90) && ((b) <= 0xff)))
 
 // defines the handmade-hero Assert() macro function for those that know Casey Muratori's legendary game engine development series
 #if DEVBUILD
@@ -34,6 +36,880 @@ See LICENSE file in the project root for the full license information.
 #else
 #define Assert(x)
 #endif
+
+#define ENGINE_FPS_TARGET 30.0f
+
+// clusters (or groups) nodes that belong to Sonic
+internal int Clustering(
+		int32_t * const part,
+		int32_t const * const frame,
+		int64_t const red_mask,
+		int64_t const green_mask,
+		int64_t const blue_mask,
+		int64_t const red_shift,
+		int64_t const green_shift,
+		int64_t const blue_shift,
+		int64_t const width,
+		int64_t const x,
+		int64_t const y
+) {
+	int32_t const rgb = frame[x];
+	int64_t const r = ((red_mask & rgb) >> red_shift);
+	int64_t const g = ((green_mask & rgb) >> green_shift);
+	int64_t const b = ((blue_mask & rgb) >> blue_shift);
+	if (Blue(r, g, b)) {
+		if (x > 0) {
+			int32_t const rgb = frame[x - 1];
+			int64_t const r = ((red_mask & rgb) >> red_shift);
+			int64_t const g = ((green_mask & rgb) >> green_shift);
+			int64_t const b = ((blue_mask & rgb) >> blue_shift);
+			if (Blue(r, g, b)) {
+				int32_t const id = (y * width + (x - 1));
+				if (*(part + id) < 0) {
+					*(part + id) -= 1;
+					*(part + y * width + x) = id;
+				}
+				else {
+					int32_t const root = *(part + id);
+					Assert(*(part + root) < 0);
+					*(part + y * width + x) = root;
+					*(part + root) -= 1;
+				}
+			}
+		}
+	}
+
+	return 0;
+
+//err_cluster:
+//	{
+		// NOTE:
+		// If the partition value for a root node is positive that means that
+		// there is a logic error because root-nodes only store counts and
+		// these are negative values to differentiate them easily from node ids.
+//		fprintf(stderr, "%s\n", "error: clustering logic");
+//		return -1;
+//	}
+}
+
+internal void MergeClusters(
+		struct cluster * const curr,
+		struct cluster * const next,
+		struct cluster * const clusters,
+		int64_t const super
+) {
+	struct cluster *iter = &clusters[curr->next];
+	while (iter->next != iter->id) {
+		Assert(BLUE_MASK_SONIC == iter->mask);
+		iter = &clusters[iter->next];
+	}
+	iter->next = next->id;
+	next->prev = iter->id;
+	next->super = super;
+}
+
+internal void CheckBoundsAndMerge(
+	struct cluster * const curr,
+	struct cluster * const next,
+	struct cluster * const clusters,
+	int64_t const super,
+	int64_t const x_l,
+	int64_t const x_u
+) {
+	if ((next->x >= x_l) && (next->x <= x_u)) {
+		if (curr->next != curr->id) {
+			MergeClusters(curr, next, clusters, super);
+			struct cluster *iter = &clusters[next->next];
+			do {
+				iter->super = super;
+				iter = &clusters[iter->next];
+			} while (iter->next != iter->id);
+			return;
+		}
+		else {
+			curr->next = next->id;
+			next->prev = curr->id;
+			next->super = super;
+			struct cluster *iter = &clusters[next->next];
+			do {
+				iter->super = super;
+				iter = &clusters[iter->next];
+			} while (iter->next != iter->id);
+			return;
+		}
+	}
+	else if (next->size > 1) {
+		struct cluster const * const node = &clusters[next->node];
+		if ((node->x >= x_l) && (node->x <= x_u)) {
+			if (curr->next != curr->id) {
+				MergeClusters(curr, next, clusters, super);
+				struct cluster *iter = &clusters[next->next];
+				do {
+					iter->super = super;
+					iter = &clusters[iter->next];
+				} while (iter->next != iter->id);
+				return;
+			}
+			else {
+				curr->next = next->id;
+				next->prev = curr->id;
+				next->super = super;
+				struct cluster *iter = &clusters[next->next];
+				do {
+					iter->super = super;
+					iter = &clusters[iter->next];
+				} while (iter->next != iter->id);
+				return;
+			}
+		}
+		else if ((next->x < x_l) && (node->x > x_u)) {
+			// by continuity one of the nodes satisfies [x_l, x_u]
+			if (curr->next != curr->id) {
+				MergeClusters(curr, next, clusters, super);
+				struct cluster *iter = &clusters[next->next];
+				do {
+					iter->super = super;
+					iter = &clusters[iter->next];
+				} while (iter->next != iter->id);
+				return;
+			}
+			else {
+				curr->next = next->id;
+				next->prev = curr->id;
+				next->super = super;
+				struct cluster *iter = &clusters[next->next];
+				do {
+					iter->super = super;
+					iter = &clusters[iter->next];
+				} while (iter->next != iter->id);
+				return;
+			}
+		}
+	}
+	else if (next->next == next->id) {
+		return;
+	}
+
+	int merged = 0;
+	struct cluster *iter = &clusters[next->next];
+	do {
+		if (iter->y != next->y) {
+			merged = 0;
+			break;
+		}
+
+		if ((iter->x >= x_l) && (iter->x <= x_u)) {
+			if (curr->next != curr->id) {
+				MergeClusters(curr, next, clusters, super);
+				merged = 1;
+				break;
+			}
+			else {
+				curr->next = next->id;
+				next->prev = curr->id;
+				next->super = super;
+				merged = 1;
+				break;
+			}
+		} else if (iter->size > 1) {
+			struct cluster const * const node = &clusters[next->node];
+			if ((node->x >= x_l) && (node->x <= x_u)) {
+				if (curr->next != curr->id) {
+					MergeClusters(curr, next, clusters, super);
+					merged = 1;
+					break;
+				}
+				else {
+					curr->next = next->id;
+					next->prev = curr->id;
+					next->super = super;
+					merged = 1;
+					break;
+				}
+			}
+			else if ((iter->x < x_l) && (node->x > x_u)) {
+				if (curr->next != curr->id) {
+					MergeClusters(curr, next, clusters, super);
+					merged = 1;
+					break;
+				}
+				else {
+					curr->next = next->id;
+					next->prev = curr->id;
+					next->super = super;
+					merged = 1;
+					break;
+				}
+			}
+		}
+		iter = &clusters[iter->next];
+	} while (iter->next != iter->id);
+
+	if (!merged) {
+		return;
+	}
+
+	iter = &clusters[next->next];
+	do {
+		iter->super = super;
+		iter = &clusters[iter->next];
+	} while (iter->next != iter->id);
+
+	return;
+}
+
+internal void MergeSuperClusters(
+		struct cluster * const curr,
+		struct cluster * const next,
+		struct cluster * const clusters,
+		int64_t const superid,
+		int64_t const x_l,
+		int64_t const x_u
+) {
+	Assert(-1 != superid);
+	Assert(-1 != next->super);
+	Assert(superid != next->super);
+	Assert(curr->super != next->super);
+	Assert(BLUE_MASK_SONIC == curr->mask);
+	Assert(BLUE_MASK_SONIC == next->mask);
+	if (next->x > x_u) {
+		return;
+	}
+	else if (next->x < x_l) {
+		int mergeable = 0;
+		struct cluster const *iter = &clusters[next->next];
+		do {
+			if (iter->y != next->y) {
+				break;
+			}
+
+			if (iter->x >= x_l) {
+				mergeable = 1;
+				break;
+			}
+			iter = &clusters[iter->next];
+		} while (iter->next != iter->id);
+
+		if (iter->next == iter->id) {
+			if ((iter->size > 1) && (iter->y == next->y)) {
+				struct cluster const *node = &clusters[iter->node];
+				if ((node->x >= x_l) && (node->x <= x_u)) {
+					mergeable = 1;
+				}
+				else if (node->x > x_u) {
+					mergeable = 1;
+				}
+			}
+		}
+
+		if (!mergeable) {
+			return;
+		}
+	}
+
+	struct cluster *super = &clusters[superid];
+	Assert(super->prev == super->id);
+
+	struct cluster *merge = &clusters[next->super];
+	Assert(merge->prev == merge->id);
+
+	int64_t id_super = -1;
+	int64_t id_merge = -1;
+	if (super->super < merge->super) {
+		id_super = super->super;
+		id_merge = merge->super;
+	}
+	else {
+		id_super = merge->super;
+		id_merge = super->super;
+	}
+
+#if DEVBUILD
+	struct cluster * const ref_super = &clusters[id_super];
+	struct cluster * const ref_merge = &clusters[id_merge];
+	Assert(ref_super->prev == ref_super->id);
+	Assert(ref_super->super == ref_super->id);
+	Assert(ref_merge->prev == ref_merge->id);
+	Assert(ref_merge->super == ref_merge->id);
+
+	// gets the total cluster count prior to the merge to verify the merge code
+	int64_t count = 0;
+	struct cluster *iter = &clusters[id_super];
+	while (iter->next != iter->id) {
+		iter = &clusters[iter->next];
+		++count;
+	}
+
+	iter = &clusters[id_merge];
+	while (iter->next != iter->id) {
+		iter = &clusters[iter->next];
+		++count;
+	}
+
+	// while-loops yield the count of the linked-clusters excluding the heads
+	int64_t const count_total = 2 + count;
+#endif
+
+	super = &clusters[id_super];
+	merge = &clusters[id_merge];
+	struct cluster *left = super;
+	struct cluster *right = merge;
+	if (super->id < merge->id) {
+		left = super;
+		right = merge;
+	}
+	else {
+		left = merge;
+		right = super;
+	}
+
+	int64_t ref_y = left->y;
+	if (left->y < right->y) {
+		while (left->y < right->y) {
+			left->super = id_super;
+			Assert(left->next != left->id);
+			left = &clusters[left->next];
+		}
+		left->super = id_super;
+	}
+	else if (left->y > right->y) {
+		while (left->y > right->y) {
+			right->super = id_super;
+			Assert(right->next != right->id);
+			right = &clusters[right->next];
+		}
+		right->super = id_super;
+	}
+
+	Assert(left->y == right->y);
+
+	if (right->x < left->x) {
+		struct cluster *iter = left;
+		left = right;
+		right = iter;
+	}
+
+	// NOTE: clusters are on the same scanline
+	ref_y = left->y;
+	if (left->prev == left->id) {
+		if (right->prev == right->id) {
+			struct cluster *prev_left = left;
+			while (left->y == ref_y) {
+				left->super = id_super;
+				if (left->next == left->id) {
+					break;
+				}
+				left = &clusters[left->next];
+			}
+
+			left->super = id_super;
+			if (left->next == left->id) {
+				if (left->y == ref_y) {
+					left->next = right->id;
+					right->prev = left->id;
+					while (right->next != right->id) {
+						right->super = id_super;
+						right = &clusters[right->next];
+					}
+					right->super = id_super;
+					goto check_merge;
+				}
+				else {
+					prev_left = &clusters[left->prev];
+					prev_left->next = right->id;
+					right->prev = prev_left->id;
+					while (right->y == ref_y) {
+						right->super = id_super;
+						if (right->next == right->id) {
+							break;
+						}
+						right = &clusters[right->next];
+					}
+
+					right->super = id_super;
+					if (right->next == right->id) {
+						if (right->y == ref_y) {
+							right->next = left->id;
+							left->prev = right->id;
+							goto check_merge;
+						}
+						else {
+							struct cluster *prev_right = &clusters[right->prev];
+							prev_right->next = left->id;
+							left->prev = prev_right->id;
+
+							left->next = right->id;
+							right->prev = left->id;
+							goto check_merge;
+						}
+					}
+					else {
+						struct cluster *prev_right = &clusters[right->prev];
+						prev_right->next = left->id;
+						left->prev = prev_right->id;
+
+						left->next = right->id;
+						right->prev = left->id;
+						while (right->next != right->id) {
+							right->super = id_super;
+							right = &clusters[right->next];
+						}
+						right->super = id_super;
+						goto check_merge;
+					}
+				}
+			}
+			else {
+				prev_left = &clusters[left->prev];
+				prev_left->next = right->id;
+				right->prev = prev_left->id;
+				struct cluster *prev_right = right;
+				while (right->y == ref_y) {
+					right->super = id_super;
+					if (right->next == right->id) {
+						break;
+					}
+					right = &clusters[right->next];
+				}
+
+				right->super = id_super;
+				if (right->next == right->id) {
+					if (right->y == ref_y) {
+						right->next = left->id;
+						left->prev = right->id;
+						while (left->next != left->id) {
+							left->super = id_super;
+							left = &clusters[left->next];
+						}
+						left->super = id_super;
+						goto check_merge;
+					}
+					else {
+						prev_right = &clusters[right->prev];
+						prev_right->next = left->id;
+						left->prev = prev_right->id;
+
+						prev_left = left;
+						while (left->y == prev_left->y) {
+							left->super = id_super;
+							if (left->next == left->id) {
+								break;
+							}
+							left = &clusters[left->next];
+						}
+
+						left->super = id_super;
+						if (left->next == left->id) {
+							if (left->y == prev_left->y) {
+								left->next = right->id;
+								right->prev = left->id;
+								goto check_merge;
+							}
+							else {
+								prev_left = &clusters[left->prev];
+								prev_left->next = right->id;
+								right->prev = prev_left->id;
+								right->next = left->id;
+								left->prev = right->id;
+								goto check_merge;
+							}
+						}
+						else {
+							prev_left = &clusters[left->prev];
+							prev_left->next = right->id;
+							right->prev = prev_left->id;
+
+							right->next = left->id;
+							left->prev = right->id;
+							while (left->next != left->id) {
+								left->super = id_super;
+								left = &clusters[left->next];
+							}
+							left->super = id_super;
+							goto check_merge;
+						}
+					}
+				}
+				else {
+					// NOTE: after linking these we are ready to repeat the work on the current scanline so nothing more to do in this codeblock
+					prev_right = &clusters[right->prev];
+					prev_right->next = left->id;
+					left->prev = prev_right->id;
+				}
+			}
+		}
+		else {
+			// NOTE: in this case the `right` has a preceeding scanline
+			struct cluster *prev_right = &clusters[right->prev];
+			prev_right->next = left->id;
+			left->prev = prev_right->id;
+
+			while (left->y == ref_y) {
+				left->super = id_super;
+				if (left->next == left->id) {
+					break;
+				}
+				left = &clusters[left->next];
+			}
+
+			left->super = id_super;
+			if (left->next == left->id) {
+				if (left->y == ref_y) {
+					left->next = right->id;
+					right->prev = left->id;
+					while (right->next != right->id) {
+						right->super = id_super;
+						right = &clusters[right->next];
+					}
+					right->super = id_super;
+					goto check_merge;
+				}
+				else {
+					struct cluster *prev_left = &clusters[left->prev];
+					prev_left->next = right->id;
+					right->prev = prev_left->id;
+
+					// need to link to left which is on the next scanline
+					while (right->y == ref_y) {
+						right->super = id_super;
+						if (right->next == right->id) {
+							break;
+						}
+						right = &clusters[right->next];
+					}
+
+					right->super = id_super;
+					if (right->next == right->id) {
+						if (right->y == ref_y) {
+							right->next = left->id;
+							left->prev = right->id;
+							goto check_merge;
+						}
+						else {
+							prev_right = &clusters[right->prev];
+							prev_right->next = left->id;
+							left->prev = prev_right->id;
+
+							left->next = right->id;
+							right->prev = left->id;
+							goto check_merge;
+						}
+					}
+					else {
+						prev_right = &clusters[right->prev];
+						prev_right->next = left->id;
+						left->prev = prev_right->id;
+
+						left->next = right->id;
+						right->prev = left->id;
+						while (right->next != right->id) {
+							right->super = id_super;
+							right= &clusters[right->next];
+						}
+						right->super = id_super;
+						goto check_merge;
+					}
+				}
+			}
+			else {
+				struct cluster *prev_left = &clusters[left->prev];
+				prev_left->next = right->id;
+				right->prev = prev_left->id;
+
+				while (right->y == ref_y) {
+					right->super = id_super;
+					if (right->next == right->id) {
+						break;
+					}
+					right = &clusters[right->next];
+				}
+
+				right->super = id_super;
+				if (right->next == right->id) {
+					if (right->y == ref_y) {
+						right->next = left->id;
+						left->prev = right->id;
+						while (left->next != left->id) {
+							left->super = id_super;
+							left = &clusters[left->next];
+						}
+						left->super = id_super;
+						goto check_merge;
+					}
+					else {
+						prev_right = &clusters[right->prev];
+						prev_right->next = left->id;
+						left->prev = prev_right->id;
+
+						// we need to iterate on left while keeping ourselves on the same scanline to link to the last cluster on right
+
+						prev_left = left;
+						while (left->y == prev_left->y) {
+							left->super = id_super;
+							if (left->next == left->id) {
+								break;
+							}
+							left = &clusters[left->next];
+						}
+
+						// then we have to update `super` data member of `left` until we reach the end
+						left->super = id_super;
+						if (left->next == left->id) {
+							if (left->y == prev_left->y) {
+								left->next = right->id;
+								right->prev = left->id;
+								goto check_merge;
+							}
+							else {
+								prev_left = &clusters[left->prev];
+								prev_left->next = right->id;
+								right->prev = prev_left->id;
+
+								right->next = left->id;
+								left->prev = right->id;
+								goto check_merge;
+							}
+						}
+						else {
+							prev_left = &clusters[left->prev];
+							prev_left->next = right->id;
+							right->prev = prev_left->id;
+
+							right->next = left->id;
+							left->prev = right->id;
+							while (left->next != left->id) {
+								left->super = id_super;
+								left = &clusters[left->next];
+							}
+							left->super = id_super;
+							goto check_merge;
+						}
+					}
+				}
+				else {
+					// after linking we are ready for executing the merge in a loop
+					prev_right = &clusters[right->prev];
+					prev_right->next = left->id;
+					left->prev = prev_right->id;
+				}
+			}
+		}
+	}
+	else {
+		if (right->prev == right->id) {
+			// NOTE: we can confidently skip to the merge loop
+		}
+		else {
+			// complains because this execution path should not happen
+			// since we explicitly looked for the first instance where
+			// both clusters have the same y-coord values.
+			// XCloseDisplay(display);
+			Assert(0);
+		}
+	}
+
+	while (1) {
+		Assert(left->y == right->y);
+
+		ref_y = left->y;
+
+		while (left->y == ref_y) {
+			left->super = id_super;
+			if (left->next == left->id) {
+				break;
+			}
+			left = &clusters[left->next];
+		}
+
+		left->super = id_super;
+		if (left->next == left->id) {
+			if (left->y == ref_y) {
+				left->next = right->id;
+				right->prev = left->id;
+				while (right->next != right->id) {
+					right->super = id_super;
+					right = &clusters[right->next];
+				}
+				right->super = id_super;
+				goto check_merge;
+			}
+			else {
+				struct cluster *prev_left = &clusters[left->prev];
+				prev_left->next = right->id;
+				right->prev = prev_left->id;
+
+				// `left` is the last and we need to link to it
+				while (right->y == ref_y) {
+					right->super = id_super;
+					if (right->next == right->id) {
+						break;
+					}
+					right = &clusters[right->next];
+				}
+
+				right->super = id_super;
+				if (right->next == right->id) {
+					if (right->y == ref_y) {
+						right->next = left->id;
+						left->prev = right->id;
+						goto check_merge;
+					}
+					else {
+						struct cluster *prev_right = &clusters[right->prev];
+						prev_right->next = left->id;
+						left->prev = prev_right->id;
+
+						left->next = right->id;
+						right->prev = left->id;
+						goto check_merge;
+					}
+				}
+				else {
+					struct cluster *prev_right = &clusters[right->prev];
+					prev_right->next = left->id;
+					left->prev = prev_right->id;
+
+					left->next = right->id;
+					right->prev = left->id;
+
+					while (right->next != right->id) {
+						right->super = id_super;
+						right = &clusters[right->next];
+					}
+					right->super = id_super;
+					goto check_merge;
+				}
+			}
+		}
+		else {
+			// you need to connect to the right and advance to the next scanline on the right if any
+			struct cluster *prev_left = &clusters[left->prev];
+			prev_left->next = right->id;
+			right->prev = prev_left->id;
+
+			while (right->y == ref_y) {
+				right->super = id_super;
+				if (right->next == right->id) {
+					break;
+				}
+				right = &clusters[right->next];
+			}
+
+			right->super = id_super;
+			if (right->next == right->id) {
+				if (right->y == ref_y) {
+					right->next = left->id;
+					left->prev = right->id;
+					while (left->next != left->id) {
+						left->super = id_super;
+						left = &clusters[left->next];
+					}
+					left->super = id_super;
+					goto check_merge;
+				}
+				else {
+					struct cluster *prev_right = &clusters[right->prev];
+					prev_right->next = left->id;
+					left->prev = prev_right->id;
+
+					prev_left = left;
+					// still need to connect to right
+					while (left->y == prev_left->y) {
+						left->super = id_super;
+						if (left->next == left->id) {
+							break;
+						}
+						left = &clusters[left->next];
+					}
+
+					left->super = id_super;
+					if (left->next == left->id) {
+						if (left->y == prev_left->y) {
+							left->next = right->id;
+							right->prev = left->id;
+							goto check_merge;
+						}
+						else {
+							prev_left = &clusters[left->prev];
+							prev_left->next = right->id;
+							right->prev = prev_left->id;
+
+							right->next = left->id;
+							left->prev = right->id;
+							goto check_merge;
+						}
+					}
+					else {
+						prev_left = &clusters[left->prev];
+						prev_left->next = right->id;
+						right->prev = prev_left->id;
+
+						right->next = left->id;
+						left->prev = right->id;
+
+						while (left->next != left->id) {
+							left->super = id_super;
+							left = &clusters[left->next];
+						}
+						left->super = id_super;
+						goto check_merge;
+					}
+				}
+			}
+			else {
+				// links clusters and we are ready for the next iteration
+				struct cluster *prev_right = &clusters[right->prev];
+				prev_right->next = left->id;
+				left->prev = prev_right->id;
+			}
+		}
+	}
+
+	Assert(0);
+	//fprintf(stderr, "%s\n", "error: should never execute");
+	return;
+#if DEVBUILD
+check_merge: {
+		     // checks the cluster count and we have to initialize to 1 to account for the super-cluster itself
+		     count = 1;
+		     iter = ref_super;
+		     while (iter->next != iter->id) {
+			     iter = &clusters[iter->next];
+			     ++count;
+		     }
+
+		     Assert(count_total == count);
+
+		     count = 1;
+		     while (iter->prev != iter->id) {
+			     iter = &clusters[iter->prev];
+			     ++count;
+		     }
+
+		     Assert(count_total == count);
+
+		     iter = ref_super;
+		     while (iter->next != iter->id) {
+			     Assert(iter->super == id_super);
+			     iter = &clusters[iter->next];
+		     }
+
+		     iter = ref_super;
+		     struct cluster *next = &clusters[iter->next];
+		     while (next->next != next->id) {
+			     Assert(iter->id < next->id);
+			     iter = &clusters[iter->next];
+			     next = &clusters[next->next];
+		     }
+
+		     return;
+	     }
+#else
+check_merge: {
+		     return;
+	     }
+#endif
+}
 
 inline void LinuxSetTimeSpec(
 	struct timespec * const clock_time,
@@ -300,14 +1176,14 @@ extern "C" void* EngineInit(void)
 	XSetWMNormalHints(display, GameWindow, SizeHintsGameWindow);
 	XSync(display, False);
 
-	XShmSegmentInfo shminfo = {};
+	struct map *data = (typeof(data)) base;
 	XImage *GameImage = XShmCreateImage(
 		display,
 		visual,
-		depth_pixel,
+		depth_window,
 		ZPixmap,
 		NULL,
-		&shminfo,
+		&data->shminfo,
 		width,
 		height
 	);
@@ -356,7 +1232,7 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
-	shminfo.shmid = rc;
+	data->shminfo.shmid = rc;
 	bytes_partition = bytes_framebuffer;
 	bytes_clusters = pixels * sizeof(*clustep);
 	bytes_cluster_list = pixels * sizeof(CID);
@@ -386,8 +1262,8 @@ extern "C" void* EngineInit(void)
 	}
 
 	errno = 0;
-	shminfo.shmaddr = GameImage->data = ((char*) shmat(shminfo.shmid, framebuffer, SHM_REMAP));
-	if (shminfo.shmaddr != framebuffer) {
+	data->shminfo.shmaddr = GameImage->data = ((char*) shmat(data->shminfo.shmid, framebuffer, SHM_REMAP));
+	if (data->shminfo.shmaddr != framebuffer) {
 		fprintf(stderr, "%s\n", "error: shmat changed the framebuffer address");
 		if (errno) {
 			fprintf(stderr, "%s\n", strerror(errno));
@@ -398,11 +1274,11 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
-	shminfo.readOnly = False;
-	if (!XShmAttach(display, &shminfo)) {
+	data->shminfo.readOnly = False;
+	if (!XShmAttach(display, &data->shminfo)) {
 		fprintf(stderr, "%s\n", "error: XShmAttach failed");
-		shmdt(shminfo.shmaddr);
-		shmctl(shminfo.shmid, IPC_RMID, 0);
+		shmdt(data->shminfo.shmaddr);
+		shmctl(data->shminfo.shmid, IPC_RMID, 0);
 		// NOTE: framebuffer data is not heap allocated and so we must nullify it for XDestroyImage otherwise it will attempt to free a memory mapped region
 		GameImage->data = NULL;
 		XDestroyImage(GameImage);
@@ -418,9 +1294,9 @@ extern "C" void* EngineInit(void)
 		if (errno) {
 			fprintf(stderr, "%s\n", strerror(errno));
 		}
-		XShmDetach(display, &shminfo);
-		shmdt(shminfo.shmaddr);
-		shmctl(shminfo.shmid, IPC_RMID, 0);
+		XShmDetach(display, &data->shminfo);
+		shmdt(data->shminfo.shmaddr);
+		shmctl(data->shminfo.shmid, IPC_RMID, 0);
 		GameImage->data = NULL;
 		XDestroyImage(GameImage);
 		XFree(SizeHintsGameWindow);
@@ -446,7 +1322,7 @@ extern "C" void* EngineInit(void)
 		0,
 		depth_window,
 		InputOutput,
-		DefaultVisualOfScreen(DefaultScreenOfDisplay(display)),
+		DefaultVisualOfScreen(screen),
 		CWBackPixel | CWEventMask,
 		&OutputWindowAttributes
 	);
@@ -455,9 +1331,9 @@ extern "C" void* EngineInit(void)
 	XSizeHints *SizeHints = XAllocSizeHints();
 	if (!SizeHints) {
 		fprintf(stderr, "%s\n", "error; XSizeHints allocation failed");
-		XShmDetach(display, &shminfo);
-		shmdt(shminfo.shmaddr);
-		shmctl(shminfo.shmid, IPC_RMID, 0);
+		XShmDetach(display, &data->shminfo);
+		shmdt(data->shminfo.shmaddr);
+		shmctl(data->shminfo.shmid, IPC_RMID, 0);
 		GameImage->data = NULL;
 		XDestroyImage(GameImage);
 		XFree(SizeHintsGameWindow);
@@ -479,7 +1355,7 @@ extern "C" void* EngineInit(void)
 	XImage *OutputImage = XCreateImage(
 		display,
 		DefaultVisualOfScreen(DefaultScreenOfDisplay(display)),
-		depth_pixel,
+		depth_window,
 		ZPixmap,
 		0,
 		backbuffer,
@@ -491,9 +1367,9 @@ extern "C" void* EngineInit(void)
 
 	if (!OutputImage) {
 		fprintf(stderr, "%s\n", "error: XCreateImage failed");
-		XShmDetach(display, &shminfo);
-		shmdt(shminfo.shmaddr);
-		shmctl(shminfo.shmid, IPC_RMID, 0);
+		XShmDetach(display, &data->shminfo);
+		shmdt(data->shminfo.shmaddr);
+		shmctl(data->shminfo.shmid, IPC_RMID, 0);
 		GameImage->data = NULL;
 		XDestroyImage(GameImage);
 		XFree(SizeHintsGameWindow);
@@ -518,9 +1394,9 @@ extern "C" void* EngineInit(void)
 		0
 	   ) {
 		fprintf(stderr, "%s\n", "error: surprising XImage mistmatch");
-		XShmDetach(display, &shminfo);
-		shmdt(shminfo.shmaddr);
-		shmctl(shminfo.shmid, IPC_RMID, 0);
+		XShmDetach(display, &data->shminfo);
+		shmdt(data->shminfo.shmaddr);
+		shmctl(data->shminfo.shmid, IPC_RMID, 0);
 		GameImage->data = NULL;
 		XDestroyImage(GameImage);
 		OutputImage->data = NULL;
@@ -537,8 +1413,8 @@ extern "C" void* EngineInit(void)
 
 	int32_t running = 1;
 	int32_t frameno = 0;
-	struct map *data = (typeof(data)) base;
 	data->display = display;
+	data->screen = screen;
 	data->GameWindow = GameWindow;
 	data->OutputWindow = OutputWindow;
 	data->GameImage = GameImage;
@@ -547,7 +1423,6 @@ extern "C" void* EngineInit(void)
 	data->SizeHints = SizeHints;
 	data->running = running;
 	data->frameno = frameno;
-	data->shminfo = shminfo;
 	data->bytes_partition = bytes_partition;
 	data->bytes_clusters = bytes_clusters;
 	data->bytes_cluster_list = bytes_cluster_list;
@@ -562,6 +1437,9 @@ extern "C" void* EngineInit(void)
 	data->width = width;
 	data->height = height;
 	data->pitch = pitch;
+	data->red_shift = red_shift;
+	data->green_shift = green_shift;
+	data->blue_shift = blue_shift;
 	float constexpr FPSFloat = ENGINE_FPS_TARGET;
 	float constexpr FPSInvFloat = 1.0e9f / FPSFloat;
 	int64_t constexpr FrameDurationTargetNanoSec = FPSInvFloat;
@@ -595,15 +1473,16 @@ extern "C" int EngineUpdateAndRender(void *base)
 {
 	int rc = 1;
 	XEvent ev = {};
-	struct map *priv = (typeof(data)) base;
+	struct map *priv = (typeof(priv)) base;
 	Display *display = priv->display;
+	Screen *screen = priv->screen;
 	XImage *GameImage = priv->GameImage;
 	XImage *OutputImage = priv->OutputImage;
 	Window GameWindow = priv->GameWindow;
 	Window OutputWindow = priv->OutputWindow;
 	if (XCheckTypedWindowEvent(display, OutputWindow, KeyPress, &ev)) {
 		if ((KBD_ESC == ev.xkey.keycode)) {
-			rc = data->running = 0;
+			rc = priv->running = 0;
 			fprintf(stdout, "%s\n", "quitting upon user request");
 			return rc;
 		}
@@ -666,7 +1545,7 @@ extern "C" int EngineUpdateAndRender(void *base)
 	for (int64_t y = 0; y != height; ++y) {
 		int32_t *frame = (int32_t*) data_framebuffer;
 		for (int64_t x = 0; x != width; ++x) {
-			rc = Clustering(
+			int32_t rc = Clustering(
 					part,
 					frame,
 					red_mask,
@@ -880,7 +1759,7 @@ extern "C" int EngineUpdateAndRender(void *base)
 			c->y_max = y_max;
 
 			// PERF: clears the player-bounding region before updating the backbuffer instead of clearing the entire window
-			data_backbuffer = (typeof(data)) (((char*) base) + offset_backbuffer + (y_min * pitch));
+			char *data_backbuffer = (typeof(data_backbuffer)) (((char*) base) + offset_backbuffer + (y_min * pitch));
 			for (int32_t y = y_min; y != y_max; ++y) {
 				int32_t *frame = (typeof(frame)) data_backbuffer;
 				for (int32_t x = x_min; x != x_max; ++x) {
@@ -890,7 +1769,7 @@ extern "C" int EngineUpdateAndRender(void *base)
 			}
 
 			iter = c;
-			char *data_backbuffer = (typeof(data)) (((char*) base) + offset_backbuffer);
+			data_backbuffer = (typeof(data_backbuffer)) (((char*) base) + offset_backbuffer);
 			int32_t *frame = (typeof(frame)) data_backbuffer;
 			while (iter->next != iter->id) {
 				for (int64_t i = 0; i != iter->size; ++i) {
@@ -907,17 +1786,17 @@ extern "C" int EngineUpdateAndRender(void *base)
 
 			XClearWindow(display, OutputWindow);
 			XPutImage(
-					display,
-					OutputWindow,
-					DefaultGCOfScreen(DefaultScreenOfDisplay(display)),
-					OutputImage,
-					c->x_min,
-					c->y_min,
-					c->x_min,
-					c->y_min,
-					(c->x_max - c->x_min),
-					(c->y_max - c->y_min)
-				 );
+				display,
+				OutputWindow,
+				DefaultGCOfScreen(screen),
+				OutputImage,
+				c->x_min,
+				c->y_min,
+				c->x_min,
+				c->y_min,
+				(c->x_max - c->x_min),
+				(c->y_max - c->y_min)
+			);
 			XFlush(display);
 		}
 		else {

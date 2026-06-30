@@ -28,9 +28,9 @@ extern "C" struct cluster {
 	int32_t __pad;
 };
 
-/* TODO: add the frame counter `frameno` to struct map to remove local static variable from EngineDelay */
 extern "C" struct map {
 	Display *display;
+	Screen *screen;
 	XImage *GameImage;
 	XImage *OutputImage;
 	XSizeHints *SizeHintsGameWindow;
@@ -60,7 +60,6 @@ extern "C" struct map {
 	int32_t red_shift;
 	int32_t green_shift;
 	int32_t blue_shift;
-	int32_t _pad[2];
 };
 
 static_assert(256 == sizeof(struct map));
