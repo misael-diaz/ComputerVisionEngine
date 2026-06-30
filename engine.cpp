@@ -1160,7 +1160,7 @@ extern "C" void* EngineInit(void)
 		++iters;
 	}
 
-	// TODO: disable fullscreen toggling because the client might support this but we are enforcing a fixed sized window
+	// FIXME: disable fullscreen toggling because the client might support this but we are enforcing a fixed sized window. This one is a tough one because there's no way to remove the internal atoms that establish the communication of the game with the Window Manager, which is the original approach I was considering.
 	XSizeHints *SizeHintsGameWindow = XAllocSizeHints();
 	if (!SizeHintsGameWindow) {
 		XCloseDisplay(display);
