@@ -466,11 +466,9 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
-	SizeHints->flags = (PMinSize | PMaxSize);
+	SizeHints->flags = PMinSize;
 	SizeHints->min_width = width;
-	SizeHints->max_width = width;
 	SizeHints->min_height = height;
-	SizeHints->max_height = height;
 	XSetWMNormalHints(display, OutputWindow, SizeHints);
 	XStoreName(display, OutputWindow, "Handcrafted Blue Computer Vision Engine");
 
