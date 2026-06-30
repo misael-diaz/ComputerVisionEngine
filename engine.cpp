@@ -22,7 +22,9 @@ See LICENSE file in the project root for the full license information.
 
 #define internal static
 #define persistent static
+#define _NET_WM_STATE_TOGGLE 2
 #define KBD_ESC XKeysymToKeycode(display, XK_Escape)
+#define KBD_F11 XKeysymToKeycode(display, XK_F11)
 #define BLUE_MASK_SONIC (1L << 0)
 #define Blue(r, g, b) ((((r) >= 0x30) && ((r) < 0x60)) && (((g) >= 0x30) && ((g) < 0x60)) && (((b) >= 0x90) && ((b) <= 0xff)))
 
@@ -1476,11 +1478,29 @@ extern "C" int EngineUpdateAndRender(void *base)
 	XImage *OutputImage = priv->OutputImage;
 	Window GameWindow = priv->GameWindow;
 	Window OutputWindow = priv->OutputWindow;
+	Atom wm_state = XInternAtom(display, "_NET_WM_STATE", False);
+	Atom fullscreen = XInternAtom(display, "_NET_WM_STATE_FULLSCREEN", False);
 	if (XCheckTypedWindowEvent(display, OutputWindow, KeyPress, &ev)) {
 		if ((KBD_ESC == ev.xkey.keycode)) {
 			rc = priv->running = 0;
 			fprintf(stdout, "%s\n", "quitting upon user request");
 			return rc;
+		} else if ((KBD_F11 == ev.xkey.keycode)) {
+			XEvent FullscreenToggleEvent = {};
+			FullscreenToggleEvent.type = ClientMessage;
+			FullscreenToggleEvent.xclient.window = OutputWindow;
+			FullscreenToggleEvent.xclient.message_type = wm_state;
+			FullscreenToggleEvent.xclient.format = 32;
+			FullscreenToggleEvent.xclient.data.l[0] = _NET_WM_STATE_TOGGLE;
+			FullscreenToggleEvent.xclient.data.l[1] = fullscreen;
+			FullscreenToggleEvent.xclient.data.l[2] = 0;
+			XSendEvent(
+				display,
+				DefaultRootWindow(display),
+				False,
+				SubstructureRedirectMask | SubstructureNotifyMask,
+				&FullscreenToggleEvent
+			);
 		}
 	}
 
