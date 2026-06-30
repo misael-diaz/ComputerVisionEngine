@@ -25,6 +25,10 @@ Python C/C++ Interoperable Computer Vision Engine
 
 **tracks player**: at this point the original engine code has been integrated and so the engine tracks the player in real-time at 30 FPS (and this is possible even if we don't enable compiler optimizations).
 
+**optimizations**: by reducing the amount of the initialization work that the engine has to do to prepare its data structures the engine can now run on larger framebuffers while reaching the target 30 FPS. The demo video shows the engine compiled without runtime checks and O2 level optimizations turned on.
+
+[![OptimizedEngine](https://img.youtube.com/vi/Q16XjThKLvI/hqdefault.jpg)](https://youtu.be/Q16XjThKLvI)
+
 ## Build
 
 To build the standalone C/C++ code:
