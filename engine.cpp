@@ -1509,6 +1509,7 @@ extern "C" int EngineUpdateAndRender(void *base)
 	int32_t const width = priv->width;
 	int32_t const height = priv->height;
 	int32_t const pitch = priv->pitch;
+	/*
 	for (int64_t y = 0; y != height; ++y) {
 		int32_t *frame = (int32_t*) data_framebuffer;
 		for (int64_t x = 0; x != width; ++x) {
@@ -1532,6 +1533,7 @@ extern "C" int EngineUpdateAndRender(void *base)
 		}
 		data_framebuffer += pitch;
 	}
+	*/
 
 	int32_t *part = (typeof(part)) (((char*) base) + offset_partition);
 	Assert(0 == (((uintptr_t) part) & 63));
@@ -1564,22 +1566,49 @@ extern "C" int EngineUpdateAndRender(void *base)
 	Assert(0 == (((uintptr_t) cl) & 63));
 	memset(cl, 0, bytes_cluster_list);
 
+	data_framebuffer = GameImage->data;
+	int32_t *framebuffer = (typeof(framebuffer)) data_framebuffer;
 	// links nodes of constant y-striped clusters (same scanline)
 	int64_t const pixels = priv->pixels;
 	for (int64_t i = 0; i != pixels; ++i) {
 		struct cluster *cluster = &clusters[i];
-		if ((BLUE_MASK_SONIC == cluster->mask) && (part[i] < 0)) {
+		int32_t const rgb = framebuffer[i];
+		int32_t const r = ((red_mask & rgb) >> red_shift);
+		int32_t const g = ((green_mask & rgb) >> green_shift);
+		int32_t const b = ((blue_mask & rgb) >> blue_shift);
+		int32_t const y = (i / width);
+		int32_t const x = i - (width * y);
+		if (Blue(r, g, b) && (part[i] < 0)) {
+			cluster->root = i;
+			cluster->node = i;
+			cluster->prev = i;
+			cluster->next = i;
 			cluster->size = -(part[i]);
+			cluster->super = -1;
+			cluster->total = 1;
+			cluster->id = i;
+			cluster->mask = BLUE_MASK_SONIC;
+			cluster->x = x;
+			cluster->y = y;
 			int64_t const childno = (cluster->size - 1);
 			cluster->node = (i + childno);
 			for (int64_t j = 0; j != childno; ++j) {
 				int64_t id = ((i + 1) + (childno - 1) - j);
+				int32_t const y = (id / width);
+				int32_t const x = id - (width * y);
 				Assert(part[id] == i);
 				struct cluster *child = &clusters[id];
-				Assert(BLUE_MASK_SONIC == child->mask);
-				child->size = 0;
-				child->node = (id - 1);
 				child->root = i;
+				child->node = (id - 1);
+				child->prev = id;
+				child->next = id;
+				child->size = 0;
+				child->super = -1;
+				child->total = 1;
+				child->id = id;
+				child->mask = BLUE_MASK_SONIC;
+				child->x = x;
+				child->y = y;
 			}
 			cl[clno] = i;
 			++clno;
