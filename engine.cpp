@@ -558,6 +558,10 @@ extern "C" void* EngineInit(void)
 	data->offset_cluster_list = offset_cluster_list;
 	data->offset_backbuffer = offset_backbuffer;
 	data->offset_framebuffer = offset_framebuffer;
+	data->pixels = pixels;
+	data->width = width;
+	data->height = height;
+	data->pitch = pitch;
 	float constexpr FPSFloat = ENGINE_FPS_TARGET;
 	float constexpr FPSInvFloat = 1.0e9f / FPSFloat;
 	int64_t constexpr FrameDurationTargetNanoSec = FPSInvFloat;
@@ -591,15 +595,339 @@ extern "C" int EngineUpdateAndRender(void *base)
 {
 	int rc = 1;
 	XEvent ev = {};
-	struct map *data = (typeof(data)) base;
-	Display *display = data->display;
-	Window OutputWindow = data->OutputWindow;
+	struct map *priv = (typeof(data)) base;
+	Display *display = priv->display;
+	XImage *GameImage = priv->GameImage;
+	XImage *OutputImage = priv->OutputImage;
+	Window GameWindow = priv->GameWindow;
+	Window OutputWindow = priv->OutputWindow;
 	if (XCheckTypedWindowEvent(display, OutputWindow, KeyPress, &ev)) {
 		if ((KBD_ESC == ev.xkey.keycode)) {
 			rc = data->running = 0;
 			fprintf(stdout, "%s\n", "quitting upon user request");
 			return rc;
 		}
+	}
+
+	uint64_t const plane_mask = 0xffffff;
+	XShmGetImage(display, GameWindow, GameImage, 0, 0, plane_mask);
+
+	int64_t const bytes_partition = priv->bytes_partition;
+	int64_t const bytes_clusters = priv->bytes_clusters;
+	int64_t const bytes_cluster_list = priv->bytes_cluster_list;
+	int64_t const bytes_backbuffer = priv->bytes_backbuffer;
+	int64_t const offset_partition = priv->offset_partition;
+	int64_t const offset_clusters = priv->offset_clusters;
+	int64_t const offset_cluster_list = priv->offset_cluster_list;
+	int64_t const offset_backbuffer = priv->offset_backbuffer;
+	OutputImage->data = (typeof(OutputImage->data)) (((char*) base) + offset_backbuffer);
+	struct cluster *clusters = (typeof(clusters)) (((char*) base) + offset_clusters);
+	Assert(0 == (((uintptr_t) clusters) & 63));
+
+	char *data_framebuffer = GameImage->data;
+	int32_t const red_mask = GameImage->red_mask;
+	int32_t const green_mask = GameImage->green_mask;
+	int32_t const blue_mask = GameImage->blue_mask;
+	int32_t const red_shift = priv->red_shift;
+	int32_t const green_shift = priv->green_shift;
+	int32_t const blue_shift = priv->blue_shift;
+	int32_t const width = priv->width;
+	int32_t const height = priv->height;
+	int32_t const pitch = priv->pitch;
+	for (int64_t y = 0; y != height; ++y) {
+		int32_t *frame = (int32_t*) data_framebuffer;
+		for (int64_t x = 0; x != width; ++x) {
+			int64_t id = width * y + x;
+			struct cluster *cluster = &clusters[id];
+			int32_t const rgb = frame[x];
+			int32_t const r = ((red_mask & rgb) >> red_shift);
+			int32_t const g = ((green_mask & rgb) >> green_shift);
+			int32_t const b = ((blue_mask & rgb) >> blue_shift);
+			cluster->mask = ((Blue(r, g, b))? BLUE_MASK_SONIC : 0);
+			cluster->root = id;
+			cluster->node = id;
+			cluster->prev = id;
+			cluster->next = id;
+			cluster->super = -1;
+			cluster->total = 1;
+			cluster->size = 1;
+			cluster->id = id;
+			cluster->x = x;
+			cluster->y = y;
+		}
+		data_framebuffer += pitch;
+	}
+
+	int32_t *part = (typeof(part)) (((char*) base) + offset_partition);
+	Assert(0 == (((uintptr_t) part) & 63));
+
+	memset(part, 0xff, bytes_partition);
+	data_framebuffer = GameImage->data;
+	for (int64_t y = 0; y != height; ++y) {
+		int32_t *frame = (int32_t*) data_framebuffer;
+		for (int64_t x = 0; x != width; ++x) {
+			rc = Clustering(
+					part,
+					frame,
+					red_mask,
+					green_mask,
+					blue_mask,
+					red_shift,
+					green_shift,
+					blue_shift,
+					width,
+					x,
+					y
+				       );
+			Assert(-1 != rc);
+		}
+		data_framebuffer += pitch;
+	}
+
+	int64_t clno = 0;
+	CID *cl = (typeof(cl)) (((char*) base) + offset_cluster_list);
+	Assert(0 == (((uintptr_t) cl) & 63));
+	memset(cl, 0, bytes_cluster_list);
+
+	// links nodes of constant y-striped clusters (same scanline)
+	int64_t const pixels = priv->pixels;
+	for (int64_t i = 0; i != pixels; ++i) {
+		struct cluster *cluster = &clusters[i];
+		if ((BLUE_MASK_SONIC == cluster->mask) && (part[i] < 0)) {
+			cluster->size = -(part[i]);
+			int64_t const childno = (cluster->size - 1);
+			cluster->node = (i + childno);
+			for (int64_t j = 0; j != childno; ++j) {
+				int64_t id = ((i + 1) + (childno - 1) - j);
+				Assert(part[id] == i);
+				struct cluster *child = &clusters[id];
+				Assert(BLUE_MASK_SONIC == child->mask);
+				child->size = 0;
+				child->node = (id - 1);
+				child->root = i;
+			}
+			cl[clno] = i;
+			++clno;
+		}
+	}
+
+	if (clno > 2) {
+		for (int64_t i = 0; i != (clno - 1); ++i) {
+			int64_t const ii = cl[i];
+			struct cluster *curr = &clusters[ii];
+			Assert(curr->root == curr->id);
+			Assert(BLUE_MASK_SONIC == curr->mask);
+
+			int64_t const x_l = curr->x;
+			int64_t x_u = curr->x;
+			if (
+				(curr->next != curr->id) &&
+				(curr->y == clusters[curr->next].y)
+			   ) {
+				struct cluster const *iter = &clusters[curr->next];
+				struct cluster const *prev = &clusters[curr->next];
+				while ((iter->y == curr->y) && (iter->next != iter->id)) {
+					Assert(BLUE_MASK_SONIC == iter->mask);
+					prev = iter;
+					iter = &clusters[iter->next];
+				}
+
+				if (iter->y != curr->y) {
+					iter = prev;
+				}
+
+				Assert(iter->y == curr->y);
+
+				if (1 == iter->size) {
+					x_u = iter->x;
+				}
+				else {
+					iter = &clusters[iter->node];
+					Assert(iter->root != iter->id);
+					x_u = iter->x;
+				}
+			}
+			else if (1 == curr->size) {
+				continue;
+			}
+			else if (curr->size > 1) {
+				// NOTE using the redundant logic expression for readability
+				struct cluster const * const node = &clusters[curr->node];
+				Assert(BLUE_MASK_SONIC == node->mask);
+				x_u = node->x;
+			}
+
+			Assert(x_l != x_u);
+			Assert(x_l < x_u);
+
+			// initially marks ordinary clusters into super-clusters
+			struct cluster *iter = &clusters[curr->id];
+			if (-1 == iter->super) {
+				while (iter->prev != iter->id) {
+					iter = &clusters[iter->prev];
+				}
+				iter->super = iter->id;
+			}
+			else {
+				iter = &clusters[iter->super];
+				Assert(iter->prev == iter->id);
+				Assert(iter->super == iter->id);
+			}
+
+			int64_t super = iter->super;
+			for (int64_t j = (i + 1); j != clno; ++j) {
+				int64_t const jj = cl[j];
+				struct cluster *next = &clusters[jj];
+				Assert(0 != next->size);
+				Assert(next->root == next->id);
+				if (next->y == curr->y) {
+					continue;
+				}
+				else if ((next->y - curr->y) > 1) {
+					break;
+				}
+				else if (next->root != next->id) {
+					continue;
+				}
+				else if (next->super == super) {
+					continue;
+				}
+				else if ((next->super != -1) && (next->super != super)) {
+					MergeSuperClusters(
+						curr,
+						next,
+						clusters,
+						super,
+						x_l,
+						x_u
+					);
+					if (super != curr->super) {
+						Assert(curr->super == next->super);
+						super = curr->super;
+					}
+					continue;
+				}
+
+				CheckBoundsAndMerge(
+					curr,
+					next,
+					clusters,
+					super,
+					x_l,
+					x_u
+				);
+			}
+		}
+
+		int64_t total_max = 1;
+		int64_t id_max = -1;
+		// gets the id of the largest blob of pixels that characterize the player
+		for (int64_t i = 0; i != clno; ++i) {
+			int64_t id = cl[i];
+			struct cluster *iter = &clusters[id];
+			if (-1 == iter->super) {
+				continue;
+			}
+			struct cluster *super = &clusters[iter->super];
+			Assert(super->super == super->id);
+			Assert(super->prev == super->id);
+
+			iter = super;
+			int64_t count = 0;
+			do {
+				count += iter->size;
+				iter = &clusters[iter->next];
+			} while (iter->next != iter->id);
+			super->total = count;
+
+			if (super->total > total_max) {
+				id_max = super->id;
+				total_max = super->total;
+			}
+		}
+
+		if (-1 != id_max) {
+			// obtains the limits of the player-bounding rectangle
+			struct cluster *c = &clusters[id_max];
+			int64_t x_min = width;
+			int64_t x_max = 0;
+			int64_t y_min = height;
+			int64_t y_max = 0;
+			struct cluster *iter = c;
+			while (iter->next != iter->id) {
+				// PERF: check the cluster coords and the last node, skip intermediate nodes since these between those not limiting
+				for (int64_t i = 0; i != iter->size; ++i) {
+					int64_t const ii = (i + iter->id);
+					struct cluster const * const node = &clusters[ii];
+					if (node->x < x_min) {
+						x_min = node->x;
+					}
+					if (node->x > x_max) {
+						x_max = node->x;
+					}
+					if (node->y < y_min) {
+						y_min = node->y;
+					}
+					if (node->y > y_max) {
+						y_max = node->y;
+					}
+				}
+				iter = &clusters[iter->next];
+			}
+			c->x_min = x_min;
+			c->x_max = x_max;
+			c->y_min = y_min;
+			c->y_max = y_max;
+
+			// PERF: clears the player-bounding region before updating the backbuffer instead of clearing the entire window
+			data_backbuffer = (typeof(data)) (((char*) base) + offset_backbuffer + (y_min * pitch));
+			for (int32_t y = y_min; y != y_max; ++y) {
+				int32_t *frame = (typeof(frame)) data_backbuffer;
+				for (int32_t x = x_min; x != x_max; ++x) {
+					frame[x] ^= frame[x];
+				}
+				data_backbuffer += pitch;
+			}
+
+			iter = c;
+			char *data_backbuffer = (typeof(data)) (((char*) base) + offset_backbuffer);
+			int32_t *frame = (typeof(frame)) data_backbuffer;
+			while (iter->next != iter->id) {
+				for (int64_t i = 0; i != iter->size; ++i) {
+					int64_t const ii = (i + iter->id);
+					struct cluster const * const node = &clusters[ii];
+					int64_t const x = node->x;
+					int64_t const y = node->y;
+					int64_t const id = width * y + x;
+					int32_t const rgb = (0xff << green_shift);
+					frame[id] = rgb;
+				}
+				iter = &clusters[iter->next];
+			}
+
+			XClearWindow(display, OutputWindow);
+			XPutImage(
+					display,
+					OutputWindow,
+					DefaultGCOfScreen(DefaultScreenOfDisplay(display)),
+					OutputImage,
+					c->x_min,
+					c->y_min,
+					c->x_min,
+					c->y_min,
+					(c->x_max - c->x_min),
+					(c->y_max - c->y_min)
+				 );
+			XFlush(display);
+		}
+		else {
+			XClearWindow(display, OutputWindow);
+			XFlush(display);
+		}
+	}
+	else {
+		XClearWindow(display, OutputWindow);
+		XFlush(display);
 	}
 
 	return rc;

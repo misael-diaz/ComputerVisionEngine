@@ -53,7 +53,14 @@ extern "C" struct map {
 	int64_t offset_cluster_list;
 	int64_t offset_framebuffer;
 	int64_t offset_backbuffer;
-	int64_t _pad[5];
+	int64_t pixels;
+	int32_t width;
+	int32_t height;
+	int32_t pitch;
+	int32_t red_shift;
+	int32_t green_shift;
+	int32_t blue_shift;
+	int32_t _pad[2];
 };
 
 static_assert(256 == sizeof(struct map));
