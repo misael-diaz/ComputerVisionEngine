@@ -29,6 +29,10 @@ Python C/C++ Interoperable Computer Vision Engine
 
 [![OptimizedEngine](https://img.youtube.com/vi/Q16XjThKLvI/hqdefault.jpg)](https://youtu.be/Q16XjThKLvI)
 
+**fullscreen mode**: added support for toggling fullscreen mode of the output window of the engine. The framerate does not drop because of the optimizations that were already in place before adding this feature. Basically we only send the pixels that comprise the player which is only a fraction of the framebuffer so it's bound to be fast. This is why I was not expecting a framerate drop after adding this feature.
+
+[![FullsreenToggling](https://img.youtube.com/vi/e5AOcsY4jWo/hqdefault.jpg)](https://youtu.be/e5AOcsY4jWo)
+
 ## Build
 
 To build the standalone C/C++ code:
