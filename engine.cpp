@@ -1327,7 +1327,7 @@ extern "C" void* EngineInit(void)
 		&OutputWindowAttributes
 	);
 
-	// TODO: you may want to disable full screen toggling for the output window
+	// TODO: consider enabling full screen toggling of the output window for the demo
 	XSizeHints *SizeHints = XAllocSizeHints();
 	if (!SizeHints) {
 		fprintf(stderr, "%s\n", "error; XSizeHints allocation failed");
