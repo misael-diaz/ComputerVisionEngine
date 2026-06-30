@@ -1730,22 +1730,18 @@ extern "C" int EngineUpdateAndRender(void *base)
 			int64_t y_max = 0;
 			struct cluster *iter = c;
 			while (iter->next != iter->id) {
-				// PERF: check the cluster coords and the last node, skip intermediate nodes since these between those not limiting
-				for (int64_t i = 0; i != iter->size; ++i) {
-					int64_t const ii = (i + iter->id);
-					struct cluster const * const node = &clusters[ii];
-					if (node->x < x_min) {
-						x_min = node->x;
-					}
-					if (node->x > x_max) {
-						x_max = node->x;
-					}
-					if (node->y < y_min) {
-						y_min = node->y;
-					}
-					if (node->y > y_max) {
-						y_max = node->y;
-					}
+				struct cluster const * const node = &clusters[iter->node];
+				if (iter->x < x_min) {
+					x_min = iter->x;
+				}
+				if (iter->y < y_min) {
+					y_min = iter->y;
+				}
+				if (node->x > x_max) {
+					x_max = node->x;
+				}
+				if (iter->y > y_max) {
+					y_max = iter->y;
 				}
 				iter = &clusters[iter->next];
 			}
