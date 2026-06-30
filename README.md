@@ -19,6 +19,12 @@ Python C/C++ Interoperable Computer Vision Engine
 
 [![NoMemoryLeaks](https://img.youtube.com/vi/CWouIx97tEo/hqdefault.jpg)](https://youtu.be/CWouIx97tEo)
 
+**fixed memory-errors**: fixed an unexpecated shared-memory error that occurred when calling `XShmGetImge` in the `EngineUpdateAndRender` function. At first this can be surprising because no errors were detected during initialization while executing `EngineInit` function. The problem was that the `shminfo` structure is bound to the scope of the function `EngineInit` so scopying the data into engine `struct map` was not enough (this is not a pointer). The solution was to work directly with the `shminfo` data member of `struct map`.
+
+**fixed Xlib errors**: `XPutImage` was failing generating a `BadMatch` or `BadValue` (really does not matter because in this case they are not so specific as to know what's wrong). The problem was that the default Graphics Context (GC) could not handle a 32-bit depth and so had to use a 24-bit depth as I was doing in the original code for the computer vision engine. After calling `XCreateImage` for the output window of the engine with a 24-bit depth there were no more errors. The lesson is to leave a note if I am going to deviate from what has been proven to work so that I can pinpoint potential errors like this one later on. Nevertheless, using GDB to check the values that the engine passes to `XPutImage` made me realize that the problem had to be the graphics context.
+
+**tracks player**: at this point the original engine code has been integrated and so the engine tracks the player in real-time at 30 FPS (and this is possible even if we don't enable compiler optimizations).
+
 ## Build
 
 To build the standalone C/C++ code:
