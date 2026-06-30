@@ -1408,9 +1408,6 @@ extern "C" void* EngineInit(void)
 		_exit(1);
 	}
 
-	// TODO: store the pointers to the heap allocated resources that were obtained via Xlib calls so that you can free them later
-	// TODO: add the EngineUpdateAndRender() function
-
 	int32_t running = 1;
 	int32_t frameno = 0;
 	data->display = display;
@@ -1450,7 +1447,6 @@ extern "C" void* EngineInit(void)
 
 extern "C" void EngineFree(void *base)
 {
-	// TODO: don't forget to nullify the data member of XImages because it's not heap allocated
 	if (!base) {
 		fprintf(stderr, "%s\n", "error: NULL pointer error");
 		_exit(1);
