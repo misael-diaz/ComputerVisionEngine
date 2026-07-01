@@ -39,6 +39,10 @@ Python C/C++ Interoperable Computer Vision Engine
 
 [![Sonic3](https://img.youtube.com/vi/az11hydDTqc/hqdefault.jpg)](https://youtu.be/az11hydDTqc)
 
+**pushing the engine to its limits**: the following video shows the framerate drop (from 30 to 15 FPS) when the engine detects the sea in the background for the player. However this also tells us about the robustness of the detection algorithm because what you see in green is a single super cluster (not a collection of disjoint clusters). We can address the framerate drop by using shared-memory region with the xserver as it is done for capturing the game framebuffer however I am not going to implement that because it is outside of the project scope. Only profiling would show how much time is required to merge the blue pixels into a super cluster to determine if the framerate drop can also be attributed to its implementation.
+
+[![StressingTheEngine](https://img.youtube.com/vi/az11hydDTqc/hqdefault.jpg)](https://youtu.be/az11hydDTqc)
+
 ## Build
 
 To build the standalone C/C++ code:
