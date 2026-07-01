@@ -1529,31 +1529,6 @@ extern "C" int EngineUpdateAndRender(void *base)
 	int32_t const width = priv->width;
 	int32_t const height = priv->height;
 	int32_t const pitch = priv->pitch;
-	/*
-	for (int64_t y = 0; y != height; ++y) {
-		int32_t *frame = (int32_t*) data_framebuffer;
-		for (int64_t x = 0; x != width; ++x) {
-			int64_t id = width * y + x;
-			struct cluster *cluster = &clusters[id];
-			int32_t const rgb = frame[x];
-			int32_t const r = ((red_mask & rgb) >> red_shift);
-			int32_t const g = ((green_mask & rgb) >> green_shift);
-			int32_t const b = ((blue_mask & rgb) >> blue_shift);
-			cluster->mask = ((Blue(r, g, b))? BLUE_MASK_SONIC : 0);
-			cluster->root = id;
-			cluster->node = id;
-			cluster->prev = id;
-			cluster->next = id;
-			cluster->super = -1;
-			cluster->total = 1;
-			cluster->size = 1;
-			cluster->id = id;
-			cluster->x = x;
-			cluster->y = y;
-		}
-		data_framebuffer += pitch;
-	}
-	*/
 
 	int32_t *part = (typeof(part)) (((char*) base) + offset_partition);
 	Assert(0 == (((uintptr_t) part) & 63));
