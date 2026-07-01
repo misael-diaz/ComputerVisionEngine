@@ -1834,7 +1834,7 @@ extern "C" void EngineTime(void *base)
 	clock_gettime(CLOCK_MONOTONIC, &data->time_start);
 }
 
-#if DEVBUILD
+#if DEVBUILD | DEVPERF
 extern "C" void EngineDelay(void *base)
 {
 	struct map *data = (typeof(data)) base;
