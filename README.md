@@ -33,6 +33,10 @@ Python C/C++ Interoperable Computer Vision Engine
 
 [![FullsreenToggling](https://img.youtube.com/vi/e5AOcsY4jWo/hqdefault.jpg)](https://youtu.be/e5AOcsY4jWo)
 
+**beyond the sandbox**: the following video shows the ability of the engine to track the player (sonic) in other installments of the game series. As a gamer that grew up playing these games I am glad that they kept the colors that makeup sonic consistent.
+
+[![Sonic3](https://img.youtube.com/vi/1HHnVZ6i4vI/hqdefault.jpg)](https://youtu.be/1HHnVZ6i4vI)
+
 ## Build
 
 To build the standalone C/C++ code:
