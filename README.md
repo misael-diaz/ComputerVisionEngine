@@ -49,6 +49,20 @@ g++ -DDEVBUILD=1 -fPIC -Wall -Wextra -Wformat -O0 -gdwarf-4 -g -shared engine.cp
 
 if you wish to compile the production code set `DEVBUILD` to zero or simply omit it from the command-line string.
 
+For optimized builds with performance stats reporting use the command-line:
+
+```sh
+g++ -DDEVPERF=1 -O2 -gdwarf-4 -g engine.cpp main.cpp -o engine.bin -lX11 -lXext
+```
+
+similarly to build the Python C/C++ interoperable backend use the following command-line:
+
+```sh
+g++ -DDEVPERF=1 -fPIC -O2 -gdwarf-4 -g -shared engine.cpp -o engine.so -lX11 -lXext
+```
+
+these disable (development) runtime checks and enable O2 level optimizations.
+
 ## Run
 
 To run from Python, copy the source code
