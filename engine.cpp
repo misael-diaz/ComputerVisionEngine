@@ -1508,9 +1508,7 @@ extern "C" int EngineUpdateAndRender(void *base)
 	XShmGetImage(display, GameWindow, GameImage, 0, 0, plane_mask);
 
 	int64_t const bytes_partition = priv->bytes_partition;
-	int64_t const bytes_clusters = priv->bytes_clusters;
 	int64_t const bytes_cluster_list = priv->bytes_cluster_list;
-	int64_t const bytes_backbuffer = priv->bytes_backbuffer;
 	int64_t const offset_partition = priv->offset_partition;
 	int64_t const offset_clusters = priv->offset_clusters;
 	int64_t const offset_cluster_list = priv->offset_cluster_list;
